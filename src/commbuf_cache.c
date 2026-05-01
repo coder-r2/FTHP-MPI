@@ -4,6 +4,8 @@
 commbuf_bin_t parep_mpi_commbuf_bins[PAREP_MPI_COMMBUF_BIN_COUNT];
 
 int parep_mpi_num_commbuf_nodes = 0;
+extern void (*_ext_free)(void *);
+extern void *(*_ext_malloc)(size_t);
 
 int get_commbuf_bin_index(size_t sz) {
 	if (sz <= 8) {
@@ -25,7 +27,8 @@ int get_commbuf_bin_index(size_t sz) {
 
 commbuf_node_t *new_commbuf_node(size_t size) {
 	commbuf_node_t *ret = parep_mpi_malloc(sizeof(commbuf_node_t));
-	ret->commbuf = parep_mpi_malloc(size);
+	if(_ext_malloc == NULL) ret->commbuf = parep_mpi_malloc(size);
+	else ret->commbuf = _ext_malloc(size);
 	ret->size = size;
 	ret->next = NULL;
 	ret->prev = NULL;
@@ -33,7 +36,8 @@ commbuf_node_t *new_commbuf_node(size_t size) {
 }
 
 void delete_commbuf_node(commbuf_node_t *node) {
-	parep_mpi_free(node->commbuf);
+	if(_ext_free == NULL) parep_mpi_free(node->commbuf);
+	else _ext_free(node->commbuf);
 	parep_mpi_free(node);
 }
 

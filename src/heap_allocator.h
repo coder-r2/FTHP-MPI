@@ -89,6 +89,7 @@ void *parep_mpi_calloc(size_t,size_t);
 char *parep_mpi_strdup(const char *);
 char *parep_mpi_strndup(const char *, size_t);
 char *parep_mpi_realpath(const char *, char *);
+int parep_mpi_posix_memalign(void **, size_t, size_t);
 
 void parep_mpi_malloc_consolidate(void);
 

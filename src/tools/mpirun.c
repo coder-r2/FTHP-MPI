@@ -430,6 +430,14 @@ int main(int argc, char **argv) {
 			}
 			
 			if(coordinator_pid == 0) { //COORDINATOR PROC
+				if(parep_mpi_node_num == 1) {
+					if(parep_mpi_size < parep_mpi_node_size) {
+						parep_mpi_node_size = parep_mpi_size;
+						char temp[64];
+						sprintf(temp,"%d",parep_mpi_node_size);
+						setenv("PAREP_MPI_NODE_SIZE",temp,1);
+					}
+				}
 				char exec[1024];
 				sprintf(exec,"%s/bin/parep_mpi_ckpt_coordinator",getenv("PAREP_MPI_PATH"));
 				char **newargv;

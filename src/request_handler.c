@@ -48,6 +48,7 @@ extern pthread_cond_t collectiveCond;
 
 extern int parep_mpi_num_commbuf_nodes;
 extern bool parep_mpi_empi_entered;
+extern bool alt_comms;
 
 extern volatile sig_atomic_t parep_mpi_wait_block;
 
@@ -96,12 +97,6 @@ bool test_all_coll_requests() {
 					cdata->completecmp = flag > 0;
 					if(cdata->completecmp) {
 						progressed = true;
-						bool alt_comms = false;
-						if(getenv("ENABLE_ALT_COMMS")) {
-							if(!strcmp(getenv("ENABLE_ALT_COMMS"),"1")) {
-								alt_comms = true;
-							}
-						}
 						if(alt_comms) {
 							if((cdata->type == MPI_FT_BCAST) || (cdata->type == MPI_FT_ALLTOALL)) {
 								void *dest_recvbuf = start->req->bufloc;
@@ -162,12 +157,6 @@ bool test_all_coll_requests() {
 					cdata->completerep = flag > 0;
 					if(cdata->completerep) {
 						progressed = true;
-						bool alt_comms = false;
-						if(getenv("ENABLE_ALT_COMMS")) {
-							if(!strcmp(getenv("ENABLE_ALT_COMMS"),"1")) {
-								alt_comms = true;
-							}
-						}
 						if(alt_comms) {
 						} else {
 							if((cdata->type == MPI_FT_REDUCE) || (cdata->type == MPI_FT_ALLREDUCE)) {
@@ -233,12 +222,6 @@ bool test_all_coll_requests() {
 				}
 				if(req->complete) {
 					progressed = true;
-					bool alt_comms = false;
-					if(getenv("ENABLE_ALT_COMMS")) {
-						if(!strcmp(getenv("ENABLE_ALT_COMMS"),"1")) {
-							alt_comms = true;
-						}
-					}
 					if(alt_comms){
 						if(cdata->type == MPI_FT_ALLREDUCE) {
 							pthread_rwlock_rdlock(&commLock);
@@ -512,12 +495,6 @@ void test_all_requests_no_lock() {
 					if(testret != EMPI_SUCCESS) flag = 0;
 					cdata->completecmp = flag > 0;
 					if(cdata->completecmp) {
-						bool alt_comms = false;
-						if(getenv("ENABLE_ALT_COMMS")) {
-							if(!strcmp(getenv("ENABLE_ALT_COMMS"),"1")) {
-								alt_comms = true;
-							}
-						}
 						if(alt_comms) {
 							if((cdata->type == MPI_FT_BCAST) || (cdata->type == MPI_FT_ALLTOALL)) {
 								void *dest_recvbuf = start->req->bufloc;
@@ -573,12 +550,6 @@ void test_all_requests_no_lock() {
 					if(testret != EMPI_SUCCESS) flag = 0;
 					cdata->completerep = flag > 0;
 					if(cdata->completerep) {
-						bool alt_comms = false;
-						if(getenv("ENABLE_ALT_COMMS")) {
-							if(!strcmp(getenv("ENABLE_ALT_COMMS"),"1")) {
-								alt_comms = true;
-							}
-						}
 						if(alt_comms) {
 						} else {
 							if((cdata->type == MPI_FT_REDUCE) || (cdata->type == MPI_FT_ALLREDUCE)) {
@@ -638,12 +609,6 @@ void test_all_requests_no_lock() {
 					req->complete = req->complete & cdata->completecolls[i];
 				}
 				if(req->complete) {
-					bool alt_comms = false;
-					if(getenv("ENABLE_ALT_COMMS")) {
-						if(!strcmp(getenv("ENABLE_ALT_COMMS"),"1")) {
-							alt_comms = true;
-						}
-					}
 					if(alt_comms) {
 						if(cdata->type == MPI_FT_ALLREDUCE) {
 							pthread_rwlock_rdlock(&commLock);
@@ -1021,12 +986,6 @@ bool test_all_requests() {
 					cdata->completecmp = flag > 0;
 					if(cdata->completecmp) {
 						progressed = true;
-						bool alt_comms = false;
-						if(getenv("ENABLE_ALT_COMMS")) {
-							if(!strcmp(getenv("ENABLE_ALT_COMMS"),"1")) {
-								alt_comms = true;
-							}
-						}
 						if(alt_comms) {
 							if((cdata->type == MPI_FT_BCAST) || (cdata->type == MPI_FT_ALLTOALL)) {
 								void *dest_recvbuf = start->req->bufloc;
@@ -1083,12 +1042,6 @@ bool test_all_requests() {
 					cdata->completerep = flag > 0;
 					if(cdata->completerep) {
 						progressed = true;
-						bool alt_comms = false;
-						if(getenv("ENABLE_ALT_COMMS")) {
-							if(!strcmp(getenv("ENABLE_ALT_COMMS"),"1")) {
-								alt_comms = true;
-							}
-						}
 						if(alt_comms) {
 						} else {
 							if((cdata->type == MPI_FT_REDUCE) || (cdata->type == MPI_FT_ALLREDUCE)) {
@@ -1152,12 +1105,6 @@ bool test_all_requests() {
 					req->complete = req->complete & cdata->completecolls[i];
 				}
 				if(req->complete) {
-					bool alt_comms = false;
-					if(getenv("ENABLE_ALT_COMMS")) {
-						if(!strcmp(getenv("ENABLE_ALT_COMMS"),"1")) {
-							alt_comms = true;
-						}
-					}
 					if(alt_comms) {
 						if(cdata->type == MPI_FT_ALLREDUCE) {
 							pthread_rwlock_rdlock(&commLock);
@@ -1369,8 +1316,8 @@ bool test_all_requests() {
 								memcpy(start->req->bufloc,((ptpdata *)(start->req->storeloc))->buf,count*size);
 								memcpy(&(((ptpdata *)(start->req->storeloc))->id),((((ptpdata *)(start->req->storeloc))->buf) + (((count+extracount) * size) - sizeof(int))),sizeof(int));
 								if(((((ptpdata *)(start->req->storeloc))->id) & 0xF0000000) == 0x70000000) {
-									if(start->req->cbuf == NULL) parep_mpi_free(((ptpdata *)(start->req->storeloc))->buf);
-									else {
+									if((start->req->cbuf == NULL) && (!alt_comms)) parep_mpi_free(((ptpdata *)(start->req->storeloc))->buf);
+									else if(start->req->cbuf != NULL) {
 										return_commbuf_node(start->req->cbuf);
 										((ptpdata *)(start->req->storeloc))->buf = NULL;
 										start->req->cbuf = NULL;
@@ -1388,14 +1335,16 @@ bool test_all_requests() {
 									((ptpdata *)(start->req->storeloc))->tag = (start->req->status).MPI_TAG;
 									pthread_mutex_unlock(&peertopeerLock);
 									
-									if(!(((ptpdata *)(start->req->storeloc))->completerep)) {
-										int cmprank;
-										EMPI_Comm_rank(start->req->comm->EMPI_COMM_CMP,&cmprank);
-										((ptpdata *)(start->req->storeloc))->buf = parep_mpi_malloc(3*sizeof(int));
-										((int *)(((ptpdata *)(start->req->storeloc))->buf))[0] = ((ptpdata *)(start->req->storeloc))->target;
-										((int *)(((ptpdata *)(start->req->storeloc))->buf))[1] = ((ptpdata *)(start->req->storeloc))->tag;
-										((int *)(((ptpdata *)(start->req->storeloc))->buf))[2] = ((ptpdata *)(start->req->storeloc))->id;
-										EMPI_Isend(((ptpdata *)(start->req->storeloc))->buf, 3, EMPI_INT, cmpToRepMap[cmprank], MPI_FT_WILDCARD_TAG, start->req->comm->EMPI_CMP_REP_INTERCOMM, start->req->reqrep);
+									if(!alt_comms) {
+										if(!(((ptpdata *)(start->req->storeloc))->completerep)) {
+											int cmprank;
+											EMPI_Comm_rank(start->req->comm->EMPI_COMM_CMP,&cmprank);
+											((ptpdata *)(start->req->storeloc))->buf = parep_mpi_malloc(3*sizeof(int));
+											((int *)(((ptpdata *)(start->req->storeloc))->buf))[0] = ((ptpdata *)(start->req->storeloc))->target;
+											((int *)(((ptpdata *)(start->req->storeloc))->buf))[1] = ((ptpdata *)(start->req->storeloc))->tag;
+											((int *)(((ptpdata *)(start->req->storeloc))->buf))[2] = ((ptpdata *)(start->req->storeloc))->id;
+											EMPI_Isend(((ptpdata *)(start->req->storeloc))->buf, 3, EMPI_INT, cmpToRepMap[cmprank], MPI_FT_WILDCARD_TAG, start->req->comm->EMPI_CMP_REP_INTERCOMM, start->req->reqrep);
+										}
 									}
 								} else {
 									(((ptpdata *)(start->req->storeloc))->completecmp) = false;
@@ -1403,73 +1352,75 @@ bool test_all_requests() {
 								}
 								
 							} else if((start->req->comm->EMPI_COMM_REP) != EMPI_COMM_NULL) {
-								int target,tag,id;
-								target = ((int *)(((ptpdata *)(start->req->storeloc))->buf))[0];
-								tag = ((int *)(((ptpdata *)(start->req->storeloc))->buf))[1];
-								id = ((int *)(((ptpdata *)(start->req->storeloc))->buf))[2];
-								if((id & 0xF0000000) == 0x70000000) {
-									((ptpdata *)(start->req->storeloc))->target = target;
-									((ptpdata *)(start->req->storeloc))->tag = tag;
-									((ptpdata *)(start->req->storeloc))->id = id;
-									
-									pthread_mutex_lock(&recvDataListLock);
-									recvDataNode *rnode = recvDataListFindWithId(target,tag,id,start->req->comm);
-									ptpdata *curargs;
-									int size;
-									EMPI_Type_size(((ptpdata *)(start->req->storeloc))->dt->edatatype,&size);
-									if(rnode != NULL) {
-										curargs = rnode->pdata;
-										recvDataListDelete(rnode);
-										pthread_cond_signal(&recvDataListCond);
-										pthread_mutex_unlock(&recvDataListLock);
+								if(!alt_comms) {
+									int target,tag,id;
+									target = ((int *)(((ptpdata *)(start->req->storeloc))->buf))[0];
+									tag = ((int *)(((ptpdata *)(start->req->storeloc))->buf))[1];
+									id = ((int *)(((ptpdata *)(start->req->storeloc))->buf))[2];
+									if((id & 0xF0000000) == 0x70000000) {
+										((ptpdata *)(start->req->storeloc))->target = target;
+										((ptpdata *)(start->req->storeloc))->tag = tag;
+										((ptpdata *)(start->req->storeloc))->id = id;
 										
-										int recvcount = curargs->count;
-										recvcount = recvcount/size;
-										
-										memcpy(start->req->bufloc,curargs->buf,recvcount*size);
-										start->req->status.count = recvcount;
-										start->req->status.MPI_TAG = curargs->tag;
-										start->req->status.MPI_SOURCE = curargs->target;
-										start->req->status.MPI_ERROR = 0;
-										
-										pthread_mutex_lock(&peertopeerLock);
-										parep_mpi_free(curargs->buf);
-										curargs->count = recvcount;
-										curargs->dt = ((ptpdata *)(start->req->storeloc))->dt;
-										parep_mpi_free(curargs->req);
-										curargs->req = &(start->req);
-										parep_mpi_free(((ptpdata *)(start->req->storeloc))->buf);
-										struct peertopeer_data *deldata = ((ptpdata *)(start->req->storeloc));
-										if(deldata == first_peertopeer) {
-											first_peertopeer = first_peertopeer->prev;
-										}
-										if(deldata == last_peertopeer) {
-											last_peertopeer = last_peertopeer->next;
-										}
-										if(deldata->next != NULL) deldata->next->prev = deldata->prev;
-										if(deldata->prev != NULL) deldata->prev->next = deldata->next;
-										parep_mpi_free(deldata);
-										start->req->storeloc = (void *)curargs;
-										pthread_mutex_unlock(&peertopeerLock);
-									} else {
-										pthread_mutex_unlock(&recvDataListLock);
-										int count = ((ptpdata *)(start->req->storeloc))->count;
+										pthread_mutex_lock(&recvDataListLock);
+										recvDataNode *rnode = recvDataListFindWithId(target,tag,id,start->req->comm);
+										ptpdata *curargs;
 										int size;
-										int extracount;
 										EMPI_Type_size(((ptpdata *)(start->req->storeloc))->dt->edatatype,&size);
-										if(size >= sizeof(int)) extracount = 1;
-										else if(((int)sizeof(int)) % size == 0) extracount = (((int)sizeof(int))/size);
-										else extracount = (((int)sizeof(int))/size) + 1;
-										if((count+extracount)*size < 3*sizeof(int)) {
+										if(rnode != NULL) {
+											curargs = rnode->pdata;
+											recvDataListDelete(rnode);
+											pthread_cond_signal(&recvDataListCond);
+											pthread_mutex_unlock(&recvDataListLock);
+											
+											int recvcount = curargs->count;
+											recvcount = recvcount/size;
+											
+											memcpy(start->req->bufloc,curargs->buf,recvcount*size);
+											start->req->status.count = recvcount;
+											start->req->status.MPI_TAG = curargs->tag;
+											start->req->status.MPI_SOURCE = curargs->target;
+											start->req->status.MPI_ERROR = 0;
+											
+											pthread_mutex_lock(&peertopeerLock);
+											parep_mpi_free(curargs->buf);
+											curargs->count = recvcount;
+											curargs->dt = ((ptpdata *)(start->req->storeloc))->dt;
+											parep_mpi_free(curargs->req);
+											curargs->req = &(start->req);
 											parep_mpi_free(((ptpdata *)(start->req->storeloc))->buf);
-											((ptpdata *)(start->req->storeloc))->buf = parep_mpi_malloc((count+extracount)*size);
+											struct peertopeer_data *deldata = ((ptpdata *)(start->req->storeloc));
+											if(deldata == first_peertopeer) {
+												first_peertopeer = first_peertopeer->prev;
+											}
+											if(deldata == last_peertopeer) {
+												last_peertopeer = last_peertopeer->next;
+											}
+											if(deldata->next != NULL) deldata->next->prev = deldata->prev;
+											if(deldata->prev != NULL) deldata->prev->next = deldata->next;
+											parep_mpi_free(deldata);
+											start->req->storeloc = (void *)curargs;
+											pthread_mutex_unlock(&peertopeerLock);
+										} else {
+											pthread_mutex_unlock(&recvDataListLock);
+											int count = ((ptpdata *)(start->req->storeloc))->count;
+											int size;
+											int extracount;
+											EMPI_Type_size(((ptpdata *)(start->req->storeloc))->dt->edatatype,&size);
+											if(size >= sizeof(int)) extracount = 1;
+											else if(((int)sizeof(int)) % size == 0) extracount = (((int)sizeof(int))/size);
+											else extracount = (((int)sizeof(int))/size) + 1;
+											if((count+extracount)*size < 3*sizeof(int)) {
+												parep_mpi_free(((ptpdata *)(start->req->storeloc))->buf);
+												((ptpdata *)(start->req->storeloc))->buf = parep_mpi_malloc((count+extracount)*size);
+											}
+											if(cmpToRepMap[target] == -1) EMPI_Irecv (((ptpdata *)(start->req->storeloc))->buf, count+extracount, ((ptpdata *)(start->req->storeloc))->dt->edatatype, target, tag, (start->req->comm->EMPI_CMP_REP_INTERCOMM), (start->req->reqrep));
+											else EMPI_Irecv (((ptpdata *)(start->req->storeloc))->buf, count+extracount, ((ptpdata *)(start->req->storeloc))->dt->edatatype, cmpToRepMap[target], tag, (start->req->comm->EMPI_COMM_REP), (start->req->reqrep));
 										}
-										if(cmpToRepMap[target] == -1) EMPI_Irecv (((ptpdata *)(start->req->storeloc))->buf, count+extracount, ((ptpdata *)(start->req->storeloc))->dt->edatatype, target, tag, (start->req->comm->EMPI_CMP_REP_INTERCOMM), (start->req->reqrep));
-										else EMPI_Irecv (((ptpdata *)(start->req->storeloc))->buf, count+extracount, ((ptpdata *)(start->req->storeloc))->dt->edatatype, cmpToRepMap[target], tag, (start->req->comm->EMPI_COMM_REP), (start->req->reqrep));
+									} else {
+										(((ptpdata *)(start->req->storeloc))->completecmp) = false;
+										*(start->req->reqcmp) = EMPI_REQUEST_NULL;
 									}
-								} else {
-									(((ptpdata *)(start->req->storeloc))->completecmp) = false;
-									*(start->req->reqcmp) = EMPI_REQUEST_NULL;
 								}
 							}
 							pthread_rwlock_unlock(&commLock);
@@ -1487,7 +1438,9 @@ bool test_all_requests() {
 						if(start->req->type == MPI_FT_RECV_REQUEST) {
 							pthread_rwlock_rdlock(&commLock);
 							if((start->req->comm->EMPI_COMM_CMP) != EMPI_COMM_NULL) {
-								parep_mpi_free(((ptpdata *)(start->req->storeloc))->buf);
+								if(!alt_comms) {
+									parep_mpi_free(((ptpdata *)(start->req->storeloc))->buf);
+								}
 							} else if((start->req->comm->EMPI_COMM_REP) != EMPI_COMM_NULL) {
 								int size;
 								int extracount;
@@ -1501,8 +1454,8 @@ bool test_all_requests() {
 								memcpy(start->req->bufloc,((ptpdata *)(start->req->storeloc))->buf,count*size);
 								memcpy(&(((ptpdata *)(start->req->storeloc))->id),((((ptpdata *)(start->req->storeloc))->buf) + (((count+extracount) * size) - sizeof(int))),sizeof(int));
 								if(((((ptpdata *)(start->req->storeloc))->id) & 0xF0000000) == 0x70000000) {
-									if(start->req->cbuf == NULL) parep_mpi_free(((ptpdata *)(start->req->storeloc))->buf);
-									else {
+									if((start->req->cbuf == NULL) && (!alt_comms)) parep_mpi_free(((ptpdata *)(start->req->storeloc))->buf);
+									else if(start->req->cbuf != NULL) {
 										return_commbuf_node(start->req->cbuf);
 										((ptpdata *)(start->req->storeloc))->buf = NULL;
 										start->req->cbuf = NULL;
@@ -1533,12 +1486,6 @@ bool test_all_requests() {
 				}
 				start->req->complete = (((ptpdata *)(start->req->storeloc))->completecmp) & (((ptpdata *)(start->req->storeloc))->completerep);
 				if(start->req->complete) {
-					bool alt_comms = false;
-					if(getenv("ENABLE_ALT_COMMS")) {
-						if(!strcmp(getenv("ENABLE_ALT_COMMS"),"1")) {
-							alt_comms = true;
-						}
-					}
 					if(alt_comms) {
 						if(start->req->type == MPI_FT_RECV_REQUEST) {
 							parep_mpi_free(((ptpdata *)(start->req->storeloc))->buf);
@@ -1728,6 +1675,256 @@ int probe_msg_from_source(MPI_Comm comm, int src) {
 				}
 			} while(flag != 0);
 		}
+	}
+	return 0;
+}
+
+int probe_msg_from_any(MPI_Comm comm) {
+	int myrank;
+	bool progressed;
+	int proberet;
+	int src = EMPI_ANY_SOURCE;
+	EMPI_Comm_rank(comm->eworldComm,&myrank);
+	if(comm->EMPI_COMM_CMP != EMPI_COMM_NULL) {
+		int flag = 0;
+		EMPI_Status stat;
+		do {
+			MPI_Comm comm = MPI_COMM_WORLD;
+			proberet = EMPI_SUCCESS;
+			proberet = EMPI_Iprobe(src,EMPI_ANY_TAG,comm->EMPI_COMM_CMP,&flag,&stat);
+			if(proberet != EMPI_SUCCESS) flag = 0;
+			if(flag) {
+				pthread_rwlock_unlock(&commLock);
+				do {
+					progressed = test_all_ptp_requests();
+				} while(progressed);
+				pthread_rwlock_rdlock(&commLock);
+				EMPI_Iprobe(src,EMPI_ANY_TAG,comm->EMPI_COMM_CMP,&flag,&stat);
+				proberet = EMPI_SUCCESS;
+				if(proberet != EMPI_SUCCESS) flag = 0;
+				if(flag == 0) {
+					flag = 1;
+					continue;
+				}
+				int count;
+				int extracount;
+				int size;
+				ptpdata *curargs;
+				curargs = (ptpdata *)parep_mpi_malloc(sizeof(ptpdata));
+				curargs->markdelcmp = false;
+				curargs->markdelrep = false;
+				EMPI_Type_size(EMPI_BYTE,&size);
+				EMPI_Get_count(&stat,EMPI_BYTE,&count);
+				if(size >= sizeof(int)) extracount = 1;
+				else if(((int)sizeof(int)) % size == 0) extracount = (((int)sizeof(int))/size);
+				else extracount = (((int)sizeof(int))/size) + 1;
+				count -= extracount;
+				curargs->buf = parep_mpi_malloc((count+extracount)*size);
+				
+				int src = stat.EMPI_SOURCE;
+				
+				EMPI_Recv(curargs->buf,count+extracount,EMPI_BYTE,src,stat.EMPI_TAG,comm->EMPI_COMM_CMP,&stat);
+							
+				memcpy(&(curargs->id),(curargs->buf) + (count * size),sizeof(int));
+				if((curargs->id & 0xF0000000) != 0x70000000) {
+					printf("%d: Wrong id probed %p myrank %d src %d\n",getpid(),curargs->id,myrank,src);
+					parep_mpi_free(curargs->buf);
+					parep_mpi_free(curargs);
+				} else {
+					MPI_Status status;
+					memcpy(&(status.status),&(stat),sizeof(EMPI_Status));
+					status.count = count;
+					if(stat.EMPI_TAG == EMPI_ANY_TAG) status.MPI_TAG = MPI_ANY_TAG;
+					else status.MPI_TAG = stat.EMPI_TAG;
+					status.MPI_ERROR = stat.EMPI_ERROR;
+					status.MPI_SOURCE = stat.EMPI_SOURCE;
+					
+					curargs->type = MPI_FT_RECV;
+					curargs->count = count;
+					curargs->dt = MPI_BYTE;
+					curargs->target = status.MPI_SOURCE;
+					curargs->tag = status.MPI_TAG;
+					curargs->comm = comm;
+					curargs->completecmp = true;
+					curargs->completerep = true;
+								
+					curargs->req = (MPI_Request *)parep_mpi_malloc(sizeof(MPI_Request));
+					*(curargs->req) = MPI_REQUEST_NULL;
+					
+					pthread_mutex_lock(&peertopeerLock);
+					if(last_peertopeer != NULL) last_peertopeer->prev = curargs;
+					else first_peertopeer = curargs;
+					curargs->prev = NULL;
+					curargs->next = last_peertopeer;
+					last_peertopeer = curargs;
+					pthread_cond_signal(&peertopeerCond);
+					pthread_mutex_unlock(&peertopeerLock);
+					
+					pthread_mutex_lock(&recvDataListLock);
+					recvDataListInsert(curargs);
+					pthread_cond_signal(&recvDataListCond);
+					pthread_mutex_unlock(&recvDataListLock);
+				}
+			}
+		} while(flag != 0);
+	} else if(comm->EMPI_COMM_REP != EMPI_COMM_NULL) {
+		int flag = 0;
+		EMPI_Status stat;
+		do {
+			proberet = EMPI_SUCCESS;
+			proberet = EMPI_Iprobe(src,EMPI_ANY_TAG,comm->EMPI_CMP_REP_INTERCOMM,&flag,&stat);
+			if(proberet != EMPI_SUCCESS) flag = 0;
+			if(flag) {
+				pthread_rwlock_unlock(&commLock);
+				do {
+					progressed = test_all_ptp_requests();
+				} while(progressed);
+				pthread_rwlock_rdlock(&commLock);
+				proberet = EMPI_SUCCESS;
+				proberet = EMPI_Iprobe(src,EMPI_ANY_TAG,comm->EMPI_CMP_REP_INTERCOMM,&flag,&stat);
+				if(proberet != EMPI_SUCCESS) flag = 0;
+				if(flag == 0) {
+					flag = 1;
+					continue;
+				}
+				int count;
+				int extracount;
+				int size;
+				ptpdata *curargs;
+				curargs = (ptpdata *)parep_mpi_malloc(sizeof(ptpdata));
+				curargs->markdelcmp = false;
+				curargs->markdelrep = false;
+				EMPI_Type_size(EMPI_BYTE,&size);
+				EMPI_Get_count(&stat,EMPI_BYTE,&count);
+				if(size >= sizeof(int)) extracount = 1;
+				else if(((int)sizeof(int)) % size == 0) extracount = (((int)sizeof(int))/size);
+				else extracount = (((int)sizeof(int))/size) + 1;
+				count -= extracount;
+				curargs->buf = parep_mpi_malloc((count+extracount)*size);
+				
+				int src = stat.EMPI_SOURCE;
+				EMPI_Recv(curargs->buf,count+extracount,EMPI_BYTE,src,stat.EMPI_TAG,comm->EMPI_CMP_REP_INTERCOMM,&stat);			
+				
+				memcpy(&(curargs->id),(curargs->buf) + (count * size),sizeof(int));
+				if((curargs->id & 0xF0000000) != 0x70000000) {
+					printf("%d: Wrong id probed %p myrank %d src %d\n",getpid(),curargs->id,myrank,src);
+					parep_mpi_free(curargs->buf);
+					parep_mpi_free(curargs);
+				} else {
+					MPI_Status status;
+					memcpy(&(status.status),&(stat),sizeof(EMPI_Status));
+					status.count = count;
+					if(stat.EMPI_TAG == EMPI_ANY_TAG) status.MPI_TAG = MPI_ANY_TAG;
+					else status.MPI_TAG = stat.EMPI_TAG;
+					status.MPI_ERROR = stat.EMPI_ERROR;
+					status.MPI_SOURCE = stat.EMPI_SOURCE;
+					
+					curargs->type = MPI_FT_RECV;
+					curargs->count = count;
+					curargs->dt = MPI_BYTE;
+					curargs->target = status.MPI_SOURCE;
+					curargs->tag = status.MPI_TAG;
+					curargs->comm = comm;
+					curargs->completecmp = true;
+					curargs->completerep = true;
+								
+					curargs->req = (MPI_Request *)parep_mpi_malloc(sizeof(MPI_Request));
+					*(curargs->req) = MPI_REQUEST_NULL;
+								
+					pthread_mutex_lock(&peertopeerLock);
+					if(last_peertopeer != NULL) last_peertopeer->prev = curargs;
+					else first_peertopeer = curargs;
+					curargs->prev = NULL;
+					curargs->next = last_peertopeer;
+					last_peertopeer = curargs;
+					pthread_cond_signal(&peertopeerCond);
+					pthread_mutex_unlock(&peertopeerLock);
+					
+					pthread_mutex_lock(&recvDataListLock);
+					recvDataListInsert(curargs);
+					pthread_cond_signal(&recvDataListCond);
+					pthread_mutex_unlock(&recvDataListLock);
+				}
+			}
+		} while(flag != 0);
+		flag = 0;
+		do {
+			proberet = EMPI_SUCCESS;
+			proberet = EMPI_Iprobe(src,EMPI_ANY_TAG,comm->EMPI_COMM_REP,&flag,&stat);
+			if(proberet != EMPI_SUCCESS) flag = 0;
+			if(flag) {
+				pthread_rwlock_unlock(&commLock);
+				do {
+					progressed = test_all_ptp_requests();
+				} while(progressed);
+				pthread_rwlock_rdlock(&commLock);
+				proberet = EMPI_SUCCESS;
+				proberet = EMPI_Iprobe(src,EMPI_ANY_TAG,comm->EMPI_COMM_REP,&flag,&stat);
+				if(proberet != EMPI_SUCCESS) flag = 0;
+				if(flag == 0) {
+					flag = 1;
+					continue;
+				}
+				int count;
+				int extracount;
+				int size;
+				ptpdata *curargs;
+				curargs = (ptpdata *)parep_mpi_malloc(sizeof(ptpdata));
+				curargs->markdelcmp = false;
+				curargs->markdelrep = false;
+				EMPI_Type_size(EMPI_BYTE,&size);
+				EMPI_Get_count(&stat,EMPI_BYTE,&count);
+				if(size >= sizeof(int)) extracount = 1;
+				else if(((int)sizeof(int)) % size == 0) extracount = (((int)sizeof(int))/size);
+				else extracount = (((int)sizeof(int))/size) + 1;
+				count -= extracount;
+				curargs->buf = parep_mpi_malloc((count+extracount)*size);
+				
+				int src = stat.EMPI_SOURCE;
+				EMPI_Recv(curargs->buf,count+extracount,EMPI_BYTE,src,stat.EMPI_TAG,comm->EMPI_COMM_REP,&stat);
+							
+				memcpy(&(curargs->id),(curargs->buf) + (count * size),sizeof(int));
+				if((curargs->id & 0xF0000000) != 0x70000000) {
+					printf("%d: Wrong id probed %p myrank %d src %d\n",getpid(),curargs->id,myrank,src);
+					parep_mpi_free(curargs->buf);
+					parep_mpi_free(curargs);
+				} else {
+					MPI_Status status;
+					memcpy(&(status.status),&(stat),sizeof(EMPI_Status));
+					status.count = count;
+					if(stat.EMPI_TAG == EMPI_ANY_TAG) status.MPI_TAG = MPI_ANY_TAG;
+					else status.MPI_TAG = stat.EMPI_TAG;
+					status.MPI_ERROR = stat.EMPI_ERROR;
+					status.MPI_SOURCE = repToCmpMap[stat.EMPI_SOURCE];
+								
+					curargs->type = MPI_FT_RECV;
+					curargs->count = count;
+					curargs->dt = MPI_BYTE;
+					curargs->target = status.MPI_SOURCE;
+					curargs->tag = status.MPI_TAG;
+					curargs->comm = comm;
+					curargs->completecmp = true;
+					curargs->completerep = true;
+								
+					curargs->req = (MPI_Request *)parep_mpi_malloc(sizeof(MPI_Request));
+					*(curargs->req) = MPI_REQUEST_NULL;
+								
+					pthread_mutex_lock(&peertopeerLock);
+					if(last_peertopeer != NULL) last_peertopeer->prev = curargs;
+					else first_peertopeer = curargs;
+					curargs->prev = NULL;
+					curargs->next = last_peertopeer;
+					last_peertopeer = curargs;
+					pthread_cond_signal(&peertopeerCond);
+					pthread_mutex_unlock(&peertopeerLock);
+					
+					pthread_mutex_lock(&recvDataListLock);
+					recvDataListInsert(curargs);
+					pthread_cond_signal(&recvDataListCond);
+					pthread_mutex_unlock(&recvDataListLock);
+				}
+			}
+		} while(flag != 0);
 	}
 	return 0;
 }

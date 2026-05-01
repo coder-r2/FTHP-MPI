@@ -102,7 +102,7 @@ extern int (*EMPI_Igather)(const void *,int,EMPI_Datatype,void *,int,EMPI_Dataty
 extern int (*EMPI_Igatherv)(const void *,int,EMPI_Datatype,void *,int *,int *,EMPI_Datatype,int,EMPI_Comm,EMPI_Request *);
 extern int (*EMPI_Ireduce)(void *,void *,int,EMPI_Datatype,EMPI_Op,int,EMPI_Comm,EMPI_Request *);
 extern int (*EMPI_Iallgather)(const void *,int,EMPI_Datatype,void *,int,EMPI_Datatype,EMPI_Comm,EMPI_Request *);
-extern int (*EMPI_Iallgatherv)(const void *,int *,int *,EMPI_Datatype,void *,int *,int *,EMPI_Datatype,EMPI_Comm,EMPI_Request *);
+extern int (*EMPI_Iallgatherv)(const void *,int,EMPI_Datatype,void *,int *,int *,EMPI_Datatype,EMPI_Comm,EMPI_Request *);
 extern int (*EMPI_Ialltoall)(void *,int,EMPI_Datatype,void *,int,EMPI_Datatype,EMPI_Comm,EMPI_Request *);
 extern int (*EMPI_Ialltoallv)(void *,int *,int *,EMPI_Datatype,void *,int *,int *,EMPI_Datatype,EMPI_Comm,EMPI_Request *);
 extern int (*EMPI_Iallreduce)(void *,void *,int,EMPI_Datatype,EMPI_Op,EMPI_Comm,EMPI_Request *);

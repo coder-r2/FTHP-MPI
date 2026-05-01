@@ -177,6 +177,8 @@ void *parep_mpi_malloc(size_t size) {
 	
 	size = size & ~7; //Round down to nearest 8-byte boundary
 	
+	size_t search_size = (size >= 256*1024) ? size + 32 : size;
+	
 	pthread_mutex_lock(&heap_free_list_mutex);
 	
 	//FASTBIN CODE START
@@ -201,10 +203,10 @@ void *parep_mpi_malloc(size_t size) {
 	}
 	//LARGE MALLOC CODE END
 	
-	int index = get_bin_index(size);
+	int index = get_bin_index(search_size);
 	int base_index = index;
 	bin_t *temp = (bin_t *)parep_mpi_heap.bins[index];
-	heap_node_t *found = get_best_fit(temp,size);
+	heap_node_t *found = get_best_fit(temp,search_size);
 	
 	bool consolidate_attempted = false;
 	while(found == NULL) {
@@ -212,9 +214,9 @@ void *parep_mpi_malloc(size_t size) {
 			if(!consolidate_attempted) {
 				parep_mpi_malloc_consolidate();
 				consolidate_attempted = true;
-				index = get_bin_index(size);
+				index = get_bin_index(search_size);
 				temp = parep_mpi_heap.bins[index];
-				found = get_best_fit(temp,size);
+				found = get_best_fit(temp,search_size);
 				continue;
 			}
 			if((parep_mpi_heap.end - parep_mpi_heap.start) >= PAREP_MPI_HEAP_MAX_SIZE)  {
@@ -236,23 +238,66 @@ void *parep_mpi_malloc(size_t size) {
 			}
 		}
 		temp = parep_mpi_heap.bins[++index];
-		found = get_best_fit(temp,size);
+		found = get_best_fit(temp,search_size);
+	}
+	
+	if(size >= 256*1024) {
+		address found_addr = (address)(&(found->next));
+		size_t mask = 31;
+		address aligned = (found_addr + mask) & ~(mask);
+		if(aligned != found_addr) {
+			size_t lead = aligned - found_addr;
+			if (lead >= overhead + MIN_ALLOC_SZ) {
+				size_t original_node_payload = GET_SIZE(found->hole_and_size);
+				remove_node(parep_mpi_heap.bins[index],found);
+				found->next = NULL;
+				found->prev = NULL;
+				heap_node_t *lead_node = found;
+				SET_SIZE(lead_node->hole_and_size, lead - overhead);
+				SET_HOLE(lead_node->hole_and_size, 1);
+				SET_FAST(lead_node->hole_and_size, 0);
+				create_foot(lead_node);
+				add_node(parep_mpi_heap.bins[get_bin_index(GET_SIZE(lead_node->hole_and_size))],lead_node);
+				
+				found = (heap_node_t *)(aligned - offset);
+				SET_SIZE(found->hole_and_size,original_node_payload - lead);
+				SET_HOLE(found->hole_and_size, 1);
+				SET_FAST(found->hole_and_size, 0);
+				found->next = NULL;
+				found->prev = NULL;
+				create_foot(found);
+				index = get_bin_index(GET_SIZE(found->hole_and_size));
+				add_node(parep_mpi_heap.bins[index],found);
+			}
+		}
 	}
 	
 	if(((GET_SIZE(found->hole_and_size)) - size) > (overhead + MIN_ALLOC_SZ)) {
-		heap_node_t *split = (heap_node_t *)(((char *)found + overhead) + size);
-		size_t foundsize = GET_SIZE(found->hole_and_size);
-		SET_SIZE(split->hole_and_size, ((foundsize) - (size) - (overhead)));
-		SET_HOLE(split->hole_and_size,1);
-		SET_FAST(split->hole_and_size,0);
-		
-		create_foot(split);
-		
-		int new_idx = get_bin_index(GET_SIZE(split->hole_and_size));
-		add_node(parep_mpi_heap.bins[new_idx],split);
-		
-		SET_SIZE(found->hole_and_size,size);
-		create_foot(found);
+		address splitpointsize = size;
+		if(size >= 256*1024) {
+			address found_addr = (address)(&(found->next));
+			size_t mask = 31;
+			address aligned = (found_addr + mask) & ~(mask);
+			if(aligned != found_addr) {
+				size_t lead = aligned - found_addr;
+				splitpointsize += lead;
+			}
+		}
+		if(((GET_SIZE(found->hole_and_size)) - splitpointsize) > (overhead + MIN_ALLOC_SZ)) {
+			heap_node_t *split = (heap_node_t *)(((char *)found + overhead) + splitpointsize);
+			size_t foundsize = GET_SIZE(found->hole_and_size);
+			SET_SIZE(split->hole_and_size, ((foundsize) - (splitpointsize) - (overhead)));
+			SET_HOLE(split->hole_and_size,1);
+			SET_FAST(split->hole_and_size,0);
+			
+			create_foot(split);
+			
+			int new_idx = get_bin_index(GET_SIZE(split->hole_and_size));
+			add_node(parep_mpi_heap.bins[new_idx],split);
+			
+			SET_SIZE(found->hole_and_size,splitpointsize);
+			create_foot(found);
+		}
 	}
 	
 	SET_HOLE(found->hole_and_size,0);
@@ -263,11 +308,32 @@ void *parep_mpi_malloc(size_t size) {
 	
 	found->prev = NULL;
 	found->next = NULL;
+	
+	if(size >= 256*1024) {
+		address found_addr = (address)(&(found->next));
+		size_t mask = 31;
+		address aligned = (found_addr + mask) & ~(mask);
+		if(aligned != found_addr) {
+			*((address *)(((void *)aligned) - sizeof(void *))) = (address)(&(found->next));
+			return (void *)aligned;
+		}
+	}
+	
 	return &found->next;
 }
 
 void parep_mpi_free(void *p) {
 	if(p == NULL) return;
+	
+	// Minimal change (4 lines) to support posix_memalign:
+	// The original allocation pointer is stored immediately before the aligned pointer.
+	// For normal malloc pointers this location holds the header (a small size value)
+	// which can never fall inside the heap address range, so no false positives.
+	void *candidate = *(void **)((char *)p - sizeof(void *));
+	if (candidate >= (void *)parep_mpi_heap.start && candidate < (void *)parep_mpi_heap.end) {
+		p = candidate;
+	}
+	
 	pthread_mutex_lock(&heap_free_list_mutex);
 	bin_t *list;
 	footer_t *new_foot, *old_foot;
@@ -353,6 +419,38 @@ void *parep_mpi_calloc(size_t nmemb, size_t size) {
 	memset(retval,0,nmemb*size);
 	return retval;
 }
+
+int parep_mpi_posix_memalign(void **memptr, size_t alignment, size_t size) {
+	if (alignment == 0 || (alignment & (alignment - 1)) != 0 || alignment < sizeof(void *)) {
+		return EINVAL;
+	}
+	if (size == 0) {
+		*memptr = NULL;
+		return 0;
+	}
+
+	// Over-allocate just enough for alignment + the back-pointer slot.
+	// This is the only place that calls malloc differently.
+	void *orig = parep_mpi_malloc(size + alignment - 1 + sizeof(void *));
+	if (orig == NULL) {
+		return ENOMEM;
+	}
+
+	// Compute aligned address leaving exactly sizeof(void*) bytes at the start
+	// of the payload for storing the original pointer that free expects.
+	size_t mask = alignment - 1;
+	size_t aligned = ((size_t)orig + mask) & ~mask;
+	if(aligned != (size_t)orig) {
+		size_t addr = (size_t)orig + sizeof(void *);
+		aligned = (addr + mask) & ~mask;
+		// Store the pointer that parep_mpi_free expects (the one returned by malloc)
+		*(void **)(aligned - sizeof(void *)) = orig;
+	}
+
+	*memptr = (void *)aligned;
+	return 0;
+}
+
 char *parep_mpi_strdup(const char *str) {
 	size_t len;
 	char *copy;
@@ -362,6 +460,7 @@ char *parep_mpi_strdup(const char *str) {
 	memcpy(copy,str,len);
 	return copy;
 }
+
 char *parep_mpi_strndup(const char *str, size_t n) {
 	size_t len;
 	char *copy;

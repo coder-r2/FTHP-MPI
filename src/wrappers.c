@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <sys/uio.h>
 #include <execinfo.h>
+#include <immintrin.h>
 
 #include "mpi-internal.h"
 #include "full_context.h"
@@ -137,6 +138,8 @@ char *(*_real_strndup)(const char *,size_t) = NULL;
 char *(*_real_realpath)(const char *,char *) = NULL;
 struct mallinfo (*_real_mallinfo)(void) = NULL;
 
+void *(*_real_memcpy)(void *, const void *, size_t) = NULL;
+
 void (*_real_gfortran_st_write_done)(void *) = NULL;
 
 void (*_ext_free)(void *) = NULL;
@@ -158,6 +161,8 @@ void *(*_ext_memalign)(size_t,size_t) = NULL;
 
 int (*_real_pipe)(int pipefd[2]) = NULL;
 int (*_real_pipe2)(int pipefd[2],int flags) = NULL;
+
+void (*_real_srand)(unsigned int) = NULL;
 
 int (*_real_sigaction)(int signum, const struct sigaction *__restrict act, struct sigaction *__restrict oldact) = NULL;
 sighandler_t (*_real_signal)(int signum, sighandler_t handler) = NULL;
@@ -275,6 +280,12 @@ sighandler_t signal(int signum, sighandler_t handler) {
 	} else {
 		return _real_signal(signum, handler);
 	}
+}
+
+void srand(unsigned int seed) {
+	if(_real_srand == NULL) _real_srand = dlsym(RTLD_NEXT,"srand");
+	EMPI_Bcast(&seed, 1, EMPI_INT, 0, MPI_COMM_WORLD->pairComm);
+	_real_srand(seed);
 }
 
 ssize_t process_vm_readv(pid_t pid, const struct iovec *local_iov, unsigned long liovcnt, const struct iovec *remote_iov, unsigned long riovcnt,unsigned long flags) {
@@ -462,12 +473,62 @@ struct mallinfo mallinfo(void) {
 	return retval;
 }
 
+/*void *memcpy(void *dst, const void *src, size_t n) {
+	if(_real_memcpy == NULL) _real_memcpy = dlsym(RTLD_NEXT,"memcpy");
+	if((pthread_self() == thread_tid[0]) && (!parep_mpi_internal_call)) parep_mpi_sighandling_state = 1;
+	PAREP_MPI_DISABLE_CKPT();
+	void *retval = dst;
+	if(n == 0) goto memcpy_exit;
+	if(n < 256*1024) {
+		retval = _real_memcpy(dst, src, n);
+		goto memcpy_exit;
+	}
+	
+	if(((address)dst % 32 != 0) || ((address)src % 32 != 0)) {
+		retval = _real_memcpy(dst, src, n);
+		goto memcpy_exit;
+	}
+	
+	char *d = (char *)dst;
+	const char *s = (const char *)src;
+	size_t i = 0;
+
+	for (; i + 128 <= n; i += 128) {
+		__m256i v0 = _mm256_stream_load_si256((const __m256i*)(s + i));
+		__m256i v1 = _mm256_stream_load_si256((const __m256i*)(s + i + 32));
+		__m256i v2 = _mm256_stream_load_si256((const __m256i*)(s + i + 64));
+		__m256i v3 = _mm256_stream_load_si256((const __m256i*)(s + i + 96));
+		_mm256_stream_si256((__m256i*)(d + i),     v0);
+		_mm256_stream_si256((__m256i*)(d + i + 32), v1);
+		_mm256_stream_si256((__m256i*)(d + i + 64), v2);
+		_mm256_stream_si256((__m256i*)(d + i + 96), v3);
+	}
+
+	_mm_sfence();
+
+	if (i < n) _real_memcpy(d+i,s+i,n-i);
+	
+memcpy_exit:
+	PAREP_MPI_ENABLE_CKPT();
+	if((pthread_self() == thread_tid[0]) && (!parep_mpi_internal_call)) {
+		if(parep_mpi_sighandling_state == 2) {
+			parep_mpi_sighandling_state = 0;
+			parep_mpi_ckpt_wait = 1;
+			pthread_kill(pthread_self(),SIGUSR1);
+			while(parep_mpi_ckpt_wait) {;}
+		}
+		parep_mpi_sighandling_state = 0;
+	}
+	return retval;
+}*/
+
 void free(void *ptr) {
 	if(_real_free == NULL) _real_free = dlsym(RTLD_NEXT,"free");
 	if((pthread_self() == thread_tid[0]) && (!parep_mpi_internal_call)) parep_mpi_sighandling_state = 1;
 	PAREP_MPI_DISABLE_CKPT();
 	if(parep_mpi_completed) return;
-	if(((parep_mpi_internal_call) || (pthread_self() != thread_tid[0]) || (ptr < parep_mpi_ext_heap_mapping) || (ptr >= (parep_mpi_ext_heap_mapping + parep_mpi_ext_heap_size))) && (!use_common_heap)) {
+	//if(((parep_mpi_internal_call) || (pthread_self() != thread_tid[0]) || (ptr < parep_mpi_ext_heap_mapping) || (ptr >= (parep_mpi_ext_heap_mapping + parep_mpi_ext_heap_size))) && (!use_common_heap)) {
+	if(((((ptr < parep_mpi_ext_heap_mapping) || (ptr >= (parep_mpi_ext_heap_mapping + parep_mpi_ext_heap_size))) && (parep_mpi_initialized)) || (((parep_mpi_internal_call) || (pthread_self() != thread_tid[0]) || (ptr < parep_mpi_ext_heap_mapping) || (ptr >= (parep_mpi_ext_heap_mapping + parep_mpi_ext_heap_size))) && (!parep_mpi_initialized))) && (!use_common_heap)) {
 		if(_ext_free == NULL) _real_free(ptr);
 		else _ext_free(ptr);
 	} else {
@@ -665,12 +726,26 @@ void *memalign(size_t boundary, size_t size)
 	return retval;
 }
 
-int posix_memalign(void **memptr, size_t alignment, size_t size)
-{
+int posix_memalign(void **memptr, size_t alignment, size_t size) {
 	if(_real_posix_memalign == NULL) _real_posix_memalign = dlsym(RTLD_NEXT,"posix_memalign");
+	if((pthread_self() == thread_tid[0]) && (!parep_mpi_internal_call)) parep_mpi_sighandling_state = 1;
 	PAREP_MPI_DISABLE_CKPT();
-	int retval = _real_posix_memalign(memptr, alignment, size);
+	int retval;
+	if(((parep_mpi_internal_call) || (pthread_self() != thread_tid[0])) && (!use_common_heap)) {
+		retval = _real_posix_memalign(memptr, alignment, size);
+	} else {
+		retval = parep_mpi_posix_memalign(memptr, alignment, size);
+	}
 	PAREP_MPI_ENABLE_CKPT();
+	if((pthread_self() == thread_tid[0]) && (!parep_mpi_internal_call)) {
+		if(parep_mpi_sighandling_state == 2) {
+			parep_mpi_sighandling_state = 0;
+			parep_mpi_ckpt_wait = 1;
+			pthread_kill(pthread_self(),SIGUSR1);
+			while(parep_mpi_ckpt_wait) {;}
+		}
+		parep_mpi_sighandling_state = 0;
+	}
 	return retval;
 }
 

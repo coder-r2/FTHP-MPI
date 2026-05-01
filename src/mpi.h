@@ -32,6 +32,7 @@ int MPI_Irecv (void *, int, MPI_Datatype, int, int, MPI_Comm, MPI_Request *);
 int MPI_Request_free(MPI_Request *);
 int MPI_Test(MPI_Request *, int *, MPI_Status *);
 int MPI_Wait(MPI_Request *, MPI_Status *);
+int MPI_Waitall(int, MPI_Request *, MPI_Status *);
 
 int MPI_Bcast (void *, int, MPI_Datatype, int, MPI_Comm);
 int MPI_Scatter (const void *, int, MPI_Datatype, void *, int, MPI_Datatype, int, MPI_Comm);

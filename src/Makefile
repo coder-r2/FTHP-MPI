@@ -27,5 +27,7 @@ ibvctx.c: ibv_wr_ops_send.ic ibv_wr_ops_recv.ic get_qp_from_pointer.ic get_cq_fr
 %.o : %.S ${HEADERS}
 	$(CC) $(INCLPATH) -fPIC -c -o $@ $<
 
+wrappers.o: CFLAGS += -march=x86-64-v3 -mtune=generic -mavx2 -mfma
+
 clean:
 	rm -f ${LIBOBJS} ${LIBDIR}/libmpi.so
