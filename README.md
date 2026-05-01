@@ -39,8 +39,12 @@ src/preload/proxy_hack.c & src/preload/empi_hack.c: Intercepts to functions like
 src/preload/proxy_loader.c: This is used to preload the hacks into the hydra_pmi_proxy (or equivalent).
 
 ## Import Environment variables to be set
-PAREP_MPI_PATH: Set this to the directory holding the src and bin directories
+PAREP_MPI_PATH: Set this to the directory holding the src and bin directories.
+
 PAREP_MPI_BASE_WORKDIR: Set this to a directory holding a folder named checkpoint. This is where your checkpoints would be stored.
+
 PAREP_MPI_EMPI_PATH: Set this to the location of your external MPI library.
+
 PAREP_MPI_LIBUNWIND_PATH: Set this to the location of the libunwind library.
+
 PAREP_MPI_LOGS_SIM_PATH: Set this to the location of the failure simulation logs if you are using them.
