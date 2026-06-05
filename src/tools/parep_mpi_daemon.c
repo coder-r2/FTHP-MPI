@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
 					if(!strcmp(line,host_name)) {
 						break;
 					}
-					*p = '.';
+					if(p != NULL) *p = '.';
 				}
 				line[nread-1] = '\n';
 			} else if(!strcmp(line,host_name)) {
