@@ -284,7 +284,7 @@ sighandler_t signal(int signum, sighandler_t handler) {
 
 void srand(unsigned int seed) {
 	if(_real_srand == NULL) _real_srand = dlsym(RTLD_NEXT,"srand");
-	EMPI_Bcast(&seed, 1, EMPI_INT, 0, MPI_COMM_WORLD->pairComm);
+	if(parep_mpi_initialized) EMPI_Bcast(&seed, 1, EMPI_INT, 0, MPI_COMM_WORLD->pairComm);
 	_real_srand(seed);
 }
 
