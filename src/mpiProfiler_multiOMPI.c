@@ -1792,7 +1792,7 @@ int MPI_Init (int *argc, char ***argv)
       stackLimit = strtol(buffer,NULL,16);
       printf("stackPosInit: %p, stackLimit: %p\n",stackPosInit,stackLimit);
     }
-		else if (strstr(buffer, "/home/phd/21/cdsjsar/Adaptive_Replication/parep-mpi/lib/libmpi.so"))
+		else if (strstr(buffer, "/scratch/risheg/Fault-Tolerant-MPI/lib/libmpi.so"))
     {
       GetFirstWord(buffer,buffer);
       word = strstr(buffer,"-");

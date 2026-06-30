@@ -5135,6 +5135,7 @@ int MPI_Replica_rearrange(int *ctrmap, int *rtcmap) {
 
 /* MPI_Init */
 int MPI_Init (int *argc, char ***argv) {
+	// printf('here, mpi_init');
 	parep_mpi_argcp = argc;
 	parep_mpi_argvp = argv;
 	parep_mpi_argc = *argc;

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export PAREP_MPI_WORKDIR=/home/phd/21/cdsjsar/Adaptive_Replication/parep-mpi
+export PAREP_MPI_WORKDIR=/scratch/risheg/Fault-Tolerant-MPI
 export CC=g++
 
 $CC $@ -I$PAREP_MPI_WORKDIR/src -fno-omit-frame-pointer -fno-stack-protector -L$PAREP_MPI_WORKDIR/lib -lmpi

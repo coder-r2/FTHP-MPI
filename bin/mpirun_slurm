@@ -2,9 +2,9 @@
 
 export PAREP_MPI_SRUN="$(which srun)"
 export DYN_CONNECT=1
-export PATH=/home/phd/21/cdsjsar/Adaptive_Replication/parep-mpi/bin/parep_mpi_srun:$PATH
-export PAREP_MPI_WORKDIR=/home/phd/21/cdsjsar/Adaptive_Replication/parep-mpi
-export LD_LIBRARY_PATH=/home/phd/21/cdsjsar/Adaptive_Replication/parep-mpi/lib:$LD_LIBRARY_PATH
+export PATH=/scratch/risheg/Fault-Tolerant-MPI/bin/parep_mpi_srun:$PATH
+export PAREP_MPI_WORKDIR=/scratch/risheg/Fault-Tolerant-MPI
+export LD_LIBRARY_PATH=/scratch/risheg/Fault-Tolerant-MPI/lib:$LD_LIBRARY_PATH
 
 export PAREP_MPI_NODE_LIST=$(scontrol show hostname $SLURM_JOB_NODELIST)
 
@@ -17,11 +17,11 @@ do
 	getent ahosts ${nlist[$x]} | grep ${nlist[$x]} | awk '{print $1}' >> $PAREP_MPI_WORKDIR/connection/nodelist
 done
 
-/home/phd/21/cdsjsar/MVAPICH2slurm/bin/mpirun $@ &
+/opt/ohpc/pub/mpi/mvapich2-gnu12/2.3.7/bin/mpirun $@ &
 
 unset LD_PRELOAD
-/home/phd/21/cdsjsar/openMPIslurm/bin/mpirun --with-ft ulfm $@
+/opt/ohpc/pub/mpi/mvapich2-gnu12/2.3.7/bin/mpirun --with-ft ulfm $@
 
-rm -R /home/phd/21/cdsjsar/Adaptive_Replication/parep-mpi/connection/*
-rm -R /home/phd/21/cdsjsar/Adaptive_Replication/parep-mpi/logs/*
-for f in /home/phd/21/cdsjsar/Adaptive_Replication/parep-mpi/tempwpid_*; do mv "$f" "$(echo "$f" | sed s/tempwpid/waitpid/)"; done
+rm -R /scratch/risheg/Fault-Tolerant-MPI/connection/*
+rm -R /scratch/risheg/Fault-Tolerant-MPI/logs/*
+for f in /scratch/risheg/Fault-Tolerant-MPI/tempwpid_*; do mv "$f" "$(echo "$f" | sed s/tempwpid/waitpid/)"; done

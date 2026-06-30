@@ -990,7 +990,7 @@ int main(int argc, char **argv) {
 				int ret;
 				printf("Killing node %s: Kill TTK %f\n",curact->relpair->second,curact->relpair->ttk);
 				fflush(stdout);
-				sprintf(kill_command, "ssh %s pkill -9 -u %s", curact->relpair->second, "cdsjsar");
+				sprintf(kill_command, "ssh %s pkill -9 -u %s", curact->relpair->second, "risheg");
 				do {
 					ret = system(kill_command);
 					printf("Failure injector system returned %d\n",ret);

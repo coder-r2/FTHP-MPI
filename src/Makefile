@@ -1,7 +1,7 @@
 CC=gcc
 LIBDIR=$(PAREP_MPI_PATH)/lib
-INCLPATH=-I$(PAREP_MPI_LIBUNWIND_PATH)/include
-LIBPATH=-L$(PAREP_MPI_LIBUNWIND_PATH)/lib
+INCLPATH=-I$(PAREP_MPI_LIBUNWIND_PATH)/include -I/opt/ohpc/admin/images/rocky8.10/usr/include
+LIBPATH=-L$(PAREP_MPI_LIBUNWIND_PATH)/lib -L/opt/ohpc/admin/images/rocky8.10/usr/lib64
 
 HEADERS = mpi-internal.h mpi.h declarations.h full_context.h ibvctx.h mmanager.h mpiProfilerdefs.h ompideclarations.h ompitypedefs.h typedefs.h parep_mpi_assembly.h list.h ibv_internal.h ibvidentifier.h debug.h wrappers.h client_thread.h request_handler.h heap_allocator.h commbuf_cache.h
 LIBOBJS = mpiProfiler.o full_context.o mmanager.o parep_mpi_assembly.o infinibandwrappers.o ibvctx.o list.o wrappers.o client_thread.o request_handler.o heap_allocator.o commbuf_cache.o

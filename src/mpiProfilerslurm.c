@@ -2303,7 +2303,7 @@ int MPI_Init (int *argc, char ***argv)
       stackLimit = strtol(buffer,NULL,16);
       printf("stackPosInit: %p, stackLimit: %p\n",stackPosInit,stackLimit);
     }
-		else if (strstr(buffer, "/home/phd/21/cdsjsar/Adaptive_Replication/parep-mpi/lib/libmpi.so"))
+		else if (strstr(buffer, "/scratch/risheg/Fault-Tolerant-MPI/lib/libmpi.so"))
     {
       GetFirstWord(buffer,buffer);
       word = strstr(buffer,"-");
@@ -2321,7 +2321,7 @@ int MPI_Init (int *argc, char ***argv)
         printf("lib lower limit updated to %p\n",libLimit[0]);
       }
     }
-		else if (strstr(buffer, "/home/phd/21/cdsjsar/Adaptive_Replication/parep-mpi/lib/libmpislurm.so"))
+		else if (strstr(buffer, "/scratch/risheg/Fault-Tolerant-MPI/lib/libmpislurm.so"))
     {
       GetFirstWord(buffer,buffer);
       word = strstr(buffer,"-");
