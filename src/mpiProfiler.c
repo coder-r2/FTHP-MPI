@@ -794,7 +794,7 @@ int MPI_Finalize(void) {
 	}
 	//mpi_ft_free_older_collectives(last_collective);
 	last_collective = NULL;
-	printf("after finalize returning targ sp %p bp %p pc %p\n",parep_mpi_target_sp,parep_mpi_target_bp,parep_mpi_target_pc);
+	// printf("after finalize returning targ sp %p bp %p pc %p\n",parep_mpi_target_sp,parep_mpi_target_bp,parep_mpi_target_pc);
 	pthread_mutex_lock(&parep_mpi_leader_rank_mutex);
 	parep_mpi_completed = 1;
 	if(myrank == parep_mpi_leader_rank) {

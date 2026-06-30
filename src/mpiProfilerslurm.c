@@ -1391,7 +1391,7 @@ int MPI_Finalize(void)
   //OMPI_Finalize();
   //dlclose(openLib);
   fclose(logfile);
-  printf("after finalize returning\n");
+//   printf("after finalize returning\n");
 	
 	FILE *pidfptr;
 	char *pidfname = (char *)malloc(1000*sizeof(char));
