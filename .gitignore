@@ -1,0 +1,8 @@
+*.o
+*.so
+bin/parep_mpi_srun/*
+bin/parep_mpi_ckpt_coordinator
+bin/parep_mpi_empi_daemon
+bin/parep_mpi_failure_injector
+bin/ssh
+lib/
