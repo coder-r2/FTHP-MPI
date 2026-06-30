@@ -7,25 +7,31 @@
 
 int main(int argc, char **argv) {
 	int i;
-	int exepoint;
 	int empi_argc = 0;
 	char parep_mpi_empi_argc[64];
 	char *executable = (char *)malloc(1000*sizeof(char));
-	for(i=1; i < argc; i++) {
-		if(argv[i][0] == '-') {
-			for(int j=0; j < strlen(argv[i]); j++) {
-				if(argv[i][j] == '=') {
-					i--;
-					break;
-				}
-			}
-			i++;
-		}
-		else {
+	int exepoint = argc;
+	
+	for (i = 1; i < argc; ) {
+		//First non-option is the executable
+		if (argv[i][0] != '-') {
+			exepoint = i;
 			break;
 		}
+
+		//Option has form -x=y or --x=y
+		if (strchr(argv[i], '=') != NULL) {
+			i++;
+			continue;
+		}
+
+		//Option may have a separate value
+		if (i + 1 < argc && argv[i + 1][0] != '-') {
+			i += 2;      //consume option and value
+		} else {
+			i += 1;      //flag with no value
+		}
 	}
-	exepoint = i;
 	char **new_argv;
 	
 	new_argv = (char **)malloc((i+2) * sizeof(char *));
