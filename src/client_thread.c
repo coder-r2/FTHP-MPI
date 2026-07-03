@@ -3,6 +3,7 @@
 #include "wrappers.h"
 #include "request_handler.h"
 #include <math.h>
+#include <stdio.h>
 
 pthread_t daemon_poller;
 pthread_t comm_shrinker;
@@ -2577,6 +2578,8 @@ void *polling_daemon(void *arg) {
 						}
 					}*/
 				} else if(cmd == CMD_INFORM_PROC_FAILED) {
+					printf("Entering failure handler\n");
+					fflush(stdout);
 					parep_mpi_failed_proc_recv = 1;
 					int num_failed_procs;
 					msgsize = 0;
@@ -3110,6 +3113,8 @@ void *polling_daemon(void *arg) {
 							_real_pthread_create(&comm_shrinker,NULL,comm_shrink,&current_alive_group);
 							//pthread_create(&comm_shrinker,NULL,comm_shrink,&current_alive_group);
 						}
+					printf("exit fh\n");
+					fflush(stdout);
 					}
 				} else if(cmd == CMD_SHRINK_PERFORMED) {
 					if(waiting_for_resp == 0) {

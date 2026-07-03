@@ -170,6 +170,26 @@ extern int (*EMPI_Unpack)(const void *, int, int *, void *, int, EMPI_Datatype, 
 extern int (*EMPI_Comm_set_errhandler)(EMPI_Comm, EMPI_Errhandler);
 extern int (*EMPI_File_set_errhandler)(EMPI_File, EMPI_Errhandler);
 
+extern int (*EMPI_Win_create)(void *, EMPI_Aint, int, EMPI_Info, EMPI_Comm, EMPI_Win *);
+extern int (*EMPI_Win_free)(EMPI_Win *);
+extern int (*EMPI_Win_fence)(int, EMPI_Win);
+extern int (*EMPI_Win_start)(EMPI_Group, int, EMPI_Win);
+extern int (*EMPI_Win_complete)(EMPI_Win);
+extern int (*EMPI_Win_post)(EMPI_Group, int, EMPI_Win);
+extern int (*EMPI_Win_wait)(EMPI_Win);
+extern int (*EMPI_Win_test)(EMPI_Win, int *);
+extern int (*EMPI_Win_lock)(int, int, int, EMPI_Win);
+extern int (*EMPI_Win_unlock)(int, EMPI_Win);
+extern int (*EMPI_Win_sync)(EMPI_Win);
+extern int (*EMPI_Win_flush)(int, EMPI_Win);
+extern int (*EMPI_Put)(const void *, int, EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Win);
+extern int (*EMPI_Get)(void *, int, EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Win);
+extern int (*EMPI_Accumulate)(const void *, int, EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Op, EMPI_Win);
+extern int (*EMPI_Compare_and_swap)(const void *, const void *, void *, EMPI_Datatype, int, EMPI_Aint, EMPI_Win);
+extern int (*EMPI_Rput)(const void *, int, EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Win, EMPI_Request *);
+extern int (*EMPI_Rget)(void *, int, EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Win, EMPI_Request *);
+extern int (*EMPI_Raccumulate)(const void *, int , EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Op, EMPI_Win, EMPI_Request *);
+
 static FILE *logfile;
 static EMPI_Comm eworldComm;
 static EMPI_Comm EMPI_COMM_CMP, EMPI_COMM_REP, EMPI_CMP_REP_INTERCOMM;
@@ -386,6 +406,7 @@ static struct skiplist
 	int id;
 	struct skiplist *next;
 } *skipcmplist = NULL, *skipreplist = NULL, *skipredlist = NULL;
+
 
 /* MPI_REQ LIST BEGIN */
 

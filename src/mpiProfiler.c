@@ -132,6 +132,26 @@ int (*EMPI_Unpack)(const void *, int, int *, void *, int, EMPI_Datatype, EMPI_Co
 int (*EMPI_Comm_set_errhandler)(EMPI_Comm, EMPI_Errhandler);
 int (*EMPI_File_set_errhandler)(EMPI_File, EMPI_Errhandler);
 
+int (*EMPI_Win_create)(void *, EMPI_Aint, int, EMPI_Info, EMPI_Comm, EMPI_Win *);
+int (*EMPI_Win_free)(EMPI_Win *);
+int (*EMPI_Win_fence)(int, EMPI_Win);
+int (*EMPI_Win_start)(EMPI_Group, int, EMPI_Win);
+int (*EMPI_Win_complete)(EMPI_Win);
+int (*EMPI_Win_post)(EMPI_Group, int, EMPI_Win);
+int (*EMPI_Win_wait)(EMPI_Win);
+int (*EMPI_Win_test)(EMPI_Win, int *);
+int (*EMPI_Win_lock)(int, int, int, EMPI_Win);
+int (*EMPI_Win_unlock)(int, EMPI_Win);
+int (*EMPI_Win_sync)(EMPI_Win);
+int (*EMPI_Win_flush)(int, EMPI_Win);
+int (*EMPI_Put)(const void *, int, EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Win);
+int (*EMPI_Get)(void *, int, EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Win);
+int (*EMPI_Accumulate)(const void *, int, EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Op, EMPI_Win);
+int (*EMPI_Compare_and_swap)(const void *, const void *, void *, EMPI_Datatype, int, EMPI_Aint, EMPI_Win);
+int (*EMPI_Rput)(const void *, int, EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Win, EMPI_Request *);
+int (*EMPI_Rget)(void *, int, EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Win, EMPI_Request *);
+int (*EMPI_Raccumulate)(const void *, int , EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Op, EMPI_Win, EMPI_Request *);
+
 int *repToCmpMap, *cmpToRepMap;
 char extLibstr[256];
 pid_t parep_mpi_coordinator_pid;
@@ -4398,6 +4418,26 @@ void initialize_mpi_variables() {
 
 	EMPI_Comm_set_errhandler = (int(*)(EMPI_Comm, EMPI_Errhandler))dlsym(extLib,"MPI_Comm_set_errhandler");
 	EMPI_File_set_errhandler = (int(*)(EMPI_File, EMPI_Errhandler))dlsym(extLib,"MPI_File_set_errhandler");
+
+	EMPI_Win_create = (int(*)(void *, EMPI_Aint, int, EMPI_Info, EMPI_Comm, EMPI_Win *))dlsym(extLib,"MPI_Win_create");
+	EMPI_Win_free = (int(*)(EMPI_Win *))dlsym(extLib,"MPI_Win_free");
+	EMPI_Win_fence = (int(*)(int, EMPI_Win))dlsym(extLib,"MPI_Win_fence");
+	EMPI_Win_start = (int (*)(EMPI_Group, int, EMPI_Win))dlsym(extLib,"MPI_Win_start");
+	EMPI_Win_complete = (int (*)(EMPI_Win))dlsym(extLib,"MPI_Win_complete");
+	EMPI_Win_post = (int(*)(EMPI_Group, int, EMPI_Win))dlsym(extLib,"MPI_Win_post");
+	EMPI_Win_wait = (int(*)(EMPI_Win))dlsym(extLib,"MPI_Win_wait");
+	EMPI_Win_test = (int(*)(EMPI_Win, int *))dlsym(extLib,"MPI_Win_test");
+	EMPI_Win_lock = (int (*)(int, int, int, EMPI_Win))dlsym(extLib,"MPI_Win_lock");
+	EMPI_Win_unlock = (int (*)(int, EMPI_Win))dlsym(extLib,"MPI_Win_unlock");
+	EMPI_Win_sync = (int (*)(EMPI_Win))dlsym(extLib,"MPI_Win_sync");
+	EMPI_Win_flush = (int (*)(int, EMPI_Win))dlsym(extLib,"MPI_Win_flush");
+	EMPI_Put = (int (*)(const void *, int, EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Win))dlsym(extLib,"MPI_Put");
+	EMPI_Get = (int (*)(void *, int, EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Win))dlsym(extLib,"MPI_Get");
+	EMPI_Accumulate = (int(*)(const void *, int, EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Op, EMPI_Win))dlsym(extLib,"MPI_Accumulate");
+	EMPI_Compare_and_swap = (int(*)(const void *, const void *, void *, EMPI_Datatype, int, EMPI_Aint, EMPI_Win))dlsym(extLib,"MPI_Compare_and_swap");
+	EMPI_Rput = (int(*)(const void *, int, EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Win, EMPI_Request *))dlsym(extLib,"MPI_Rput");
+	EMPI_Rget = (int(*)(void *, int, EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Win, EMPI_Request *))dlsym(extLib,"MPI_Rget");
+	EMPI_Raccumulate = (int(*)(const void *, int , EMPI_Datatype, int, EMPI_Aint, int, EMPI_Datatype, EMPI_Op, EMPI_Win, EMPI_Request *))dlsym(extLib,"MPI_Raccumulate");
 	
 	if(parep_mpi_ext_memhooks) {
 		_ext_free = (void(*)(void *))dlsym(extLib,"free");
