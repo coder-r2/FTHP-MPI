@@ -100,6 +100,13 @@ int MPI_File_write_at_all_end(MPI_File, const void *, MPI_Status *);
 int MPI_File_get_position(MPI_File, MPI_Offset *);
 int MPI_File_get_position_shared(MPI_File, MPI_Offset *);
 
+int MPI_Win_create(void *base, MPI_Aint size, int disp_unit, MPI_Info info, MPI_Comm comm, MPI_Win *win);
+int MPI_Win_free(MPI_Win *win);
+int MPI_Rget(void *origin_addr, int origin_count, MPI_Datatype origin_datatype, int target_rank, MPI_Aint target_disp, int target_count, MPI_Datatype target_datatype, MPI_Win win, MPI_Request *request);
+int MPI_Win_fence(int assert, MPI_Win win);
+int MPI_Win_lock(int lock_type, int rank, int assert, MPI_Win win);
+int MPI_Win_unlock(int rank, MPI_Win win);
+
 int MPI_Type_commit(MPI_Datatype *);
 int MPI_Type_free(MPI_Datatype *);
 int MPI_Type_contiguous(int, MPI_Datatype, MPI_Datatype *);

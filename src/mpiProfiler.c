@@ -172,6 +172,13 @@ int ___ckpt_counter = -1;
 void *extLib = NULL;
 void *openLib = NULL;
 
+// Array to safely map 32-bit user integers to 64-bit struct pointers
+struct ft_win_t {
+	EMPI_Win ewin;
+};
+struct ft_win_t *winarr[1024];
+int win_counter = 0;
+
 double timespec_to_double(struct timespec ts) {
 	return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
 }
@@ -7723,6 +7730,8 @@ int MPI_Test (MPI_Request *req, int *flag, MPI_Status *status) {
 }
 
 int MPI_Wait (MPI_Request *req, MPI_Status *status) {
+	printf("[Wait] %d: Entered MPI_Wait, Request type: %d\n", getpid(), (*req)->type);
+	fflush(stdout);
 	bool int_call;
 	if(pthread_self() == thread_tid[0]) {
 		int_call = parep_mpi_internal_call;
@@ -7734,12 +7743,18 @@ int MPI_Wait (MPI_Request *req, MPI_Status *status) {
 	//waittime.tv_nsec = 0;
 	parep_mpi_sighandling_state = 3;
 	pthread_mutex_lock(&reqListLock);
+	printf("[Wait] %d: able to lock reqlist\n", getpid());
+	fflush(stdout);
 	while(!(ftreq->complete)) {
 		if(parep_mpi_wait_block == 1) {
+			printf("[Wait] in mpi block 1\n");
+			fflush(stdout);
 			pthread_mutex_unlock(&reqListLock);
 			pthread_mutex_lock(&reqListLock);
 		}
 		if(parep_mpi_sighandling_state == 2) {
+			printf("[Wait] killing block\n");
+			fflush(stdout);
 			parep_mpi_sighandling_state = 0;
 			//end_wake_thread = 1;
 			pthread_mutex_unlock(&reqListLock);
@@ -7750,10 +7765,16 @@ int MPI_Wait (MPI_Request *req, MPI_Status *status) {
 			pthread_mutex_lock(&reqListLock);
 			parep_mpi_sighandling_state = 3;
 		}
+		printf("[Wait] %d: Launching test_all_requests\n", getpid());
+		fflush(stdout);
 		test_all_requests();
+		printf("[Wait] %d: Exited test_all_requests\n", getpid());
+		fflush(stdout);
 		//pthread_cond_wait(&reqListCond,&reqListLock);
 		//pthread_cond_timedwait(&reqListCond,&reqListLock,&waittime);
 	}
+	printf("[Wait] %d: while ftrep complete loop done\n", getpid());
+	fflush(stdout);
 	if(parep_mpi_sighandling_state == 3) parep_mpi_sighandling_state = 1;
 	/*else if(parep_mpi_sighandling_state == 2) {
 		end_wake_thread = 1;
@@ -7765,10 +7786,14 @@ int MPI_Wait (MPI_Request *req, MPI_Status *status) {
 		*status = (ftreq)->status;
 	}
 	reqListDelete(ftreq->rnode);
-	if(*((ftreq)->reqcmp) != EMPI_REQUEST_NULL) EMPI_Request_free(((ftreq)->reqcmp));
-	if(*((ftreq)->reqrep) != EMPI_REQUEST_NULL) EMPI_Request_free(((ftreq)->reqrep));
+	if (ftreq->type != MPI_FT_RGET_REQUEST && ftreq->type != MPI_FT_RPUT_REQUEST) {
+		if(*((ftreq)->reqcmp) != EMPI_REQUEST_NULL) EMPI_Request_free(((ftreq)->reqcmp));
+		if(*((ftreq)->reqrep) != EMPI_REQUEST_NULL) EMPI_Request_free(((ftreq)->reqrep));
+	}
 	parep_mpi_free(ftreq->reqcmp);
 	parep_mpi_free(ftreq->reqrep);
+	printf("[Wait] %d: before condition\n", getpid());
+	fflush(stdout);
 	if(ftreq->type == MPI_FT_COLLECTIVE_REQUEST) {
 		clcdata *cldata = ((clcdata *)(ftreq->storeloc));
 		for(int i = 0; i < ftreq->num_reqcolls; i++) {
@@ -7815,6 +7840,9 @@ int MPI_Wait (MPI_Request *req, MPI_Status *status) {
 		*(((ptpdata *)(ftreq->storeloc))->req) = MPI_REQUEST_NULL;
 		(((ptpdata *)(ftreq->storeloc))->req) = NULL;
 		pthread_mutex_unlock(&peertopeerLock);
+	} else if(ftreq->type == MPI_FT_RGET_REQUEST || ftreq->type == MPI_FT_RPUT_REQUEST) {
+		printf("[Wait] %d: Nothing to clean up\n", getpid());
+		fflush(stdout);
 	} else {
 		switch(ftreq->iotype) {
 			int transferred;
@@ -7858,7 +7886,8 @@ int MPI_Wait (MPI_Request *req, MPI_Status *status) {
 	ftreq = MPI_REQUEST_NULL;
 	*req = ftreq;
 	pthread_mutex_unlock(&reqListLock);
-	
+	printf("%d: req set to null\n", getpid());
+	fflush(stdout);
 	if(parep_mpi_sighandling_state == 2) {
 		parep_mpi_sighandling_state = 0;
 		parep_mpi_ckpt_wait = 1;
@@ -11931,4 +11960,225 @@ int MPI_Info_create(MPI_Info *info) {
 
 int MPI_Abort(MPI_Comm comm, int errorcode) {
 	return EMPI_Abort(comm->eworldComm,errorcode);
+}
+
+// One-sided Communications
+
+int MPI_Win_create(void *base, MPI_Aint size, int disp_unit, MPI_Info info, MPI_Comm comm, MPI_Win *win) {
+    bool int_call;
+    int retVal;
+    
+    if(pthread_self() == thread_tid[0]) {
+        int_call = parep_mpi_internal_call;
+        parep_mpi_internal_call = true;
+    }
+    parep_mpi_sighandling_state = 1;
+    
+    // 1. Allocate the wrapper struct normally (keep the pointer!)
+    struct ft_win_t *my_win = (struct ft_win_t *)parep_mpi_malloc(sizeof(struct ft_win_t));
+    
+    // 2. Direct info cast
+    EMPI_Info einfo = (EMPI_Info)info;
+    
+    // 3. Fire the hardware creation using our pointer
+    retVal = EMPI_Win_create(base, size, disp_unit, einfo, comm->eworldComm, &(my_win->ewin));
+    
+    // 4. Safely map it in our array and return the simple integer ID to the user!
+    win_counter++;
+    winarr[win_counter] = my_win;
+    *win = win_counter; 
+    
+    if(parep_mpi_sighandling_state == 2) {
+        parep_mpi_sighandling_state = 0;
+        parep_mpi_ckpt_wait = 1;
+        pthread_kill(pthread_self(), SIGUSR1);
+        while(parep_mpi_ckpt_wait) {;}
+    }
+    
+    parep_mpi_sighandling_state = 0;
+    if(pthread_self() == thread_tid[0]) parep_mpi_internal_call = int_call;
+    
+    return retVal;
+}
+
+int MPI_Win_free(MPI_Win *win) {
+    bool int_call;
+    int retVal;
+    
+    if(pthread_self() == thread_tid[0]) {
+        int_call = parep_mpi_internal_call;
+        parep_mpi_internal_call = true;
+    }
+    parep_mpi_sighandling_state = 1;
+    
+    // 1. Un-map the integer ID back into our real struct pointer!
+    int idx = *win;
+    struct ft_win_t *my_win = winarr[idx];
+    
+    // 2. Free the physical EMPI window
+    retVal = EMPI_Win_free(&(my_win->ewin));
+    
+    // 3. Free our wrapper struct and clear the array
+    parep_mpi_free(my_win);
+    winarr[idx] = NULL;
+    *win = MPI_WIN_NULL; 
+    
+    if(parep_mpi_sighandling_state == 2) {
+        parep_mpi_sighandling_state = 0;
+        parep_mpi_ckpt_wait = 1;
+        pthread_kill(pthread_self(), SIGUSR1);
+        while(parep_mpi_ckpt_wait) {;}
+    }
+    
+    parep_mpi_sighandling_state = 0;
+    if(pthread_self() == thread_tid[0]) parep_mpi_internal_call = int_call;
+    
+    return retVal;
+}
+
+int MPI_Rget(void *origin_addr, int origin_count, MPI_Datatype origin_datatype, int target_rank, MPI_Aint target_disp, int target_count, MPI_Datatype target_datatype, MPI_Win win, MPI_Request *request) {
+    bool int_call;
+    int retVal;
+    
+    if(pthread_self() == thread_tid[0]) {
+        int_call = parep_mpi_internal_call;
+        parep_mpi_internal_call = true;
+    }
+    parep_mpi_sighandling_state = 1;
+
+	printf("[Rget] %d: Sighandling state set\n", getpid());
+	fflush(stdout);
+    
+    // 1. Look up the real struct pointer using the integer ID the user gave us
+    struct ft_win_t *my_win = winarr[win];
+    
+    *request = (MPI_Request)parep_mpi_malloc(sizeof(struct mpi_ft_request));
+	(*request)->type = MPI_FT_RGET_REQUEST;
+    (*request)->complete = false;
+    (*request)->reqcmp = (EMPI_Request *)parep_mpi_malloc(sizeof(EMPI_Request));
+    (*request)->reqrep = (EMPI_Request *)parep_mpi_malloc(sizeof(EMPI_Request));
+    
+    *((*request)->reqcmp) = 0; 
+    *((*request)->reqrep) = 0;
+
+	printf("[Rget] %d: Request malloced\n", getpid());
+	fflush(stdout);
+
+	pthread_mutex_lock(&reqListLock);
+	(*request)->rnode = reqListInsert(*request);
+	pthread_cond_signal(&reqListCond);
+	pthread_mutex_unlock(&reqListLock);
+
+	printf("[Rget] %d: Reqlist added\n", getpid());
+	fflush(stdout);
+    
+    // 2. Fire the transfer using the safely unwrapped ewin
+    retVal = EMPI_Rget(origin_addr, origin_count, origin_datatype->edatatype, target_rank, target_disp, target_count, target_datatype->edatatype, my_win->ewin, (*request)->reqcmp);
+    
+	printf("[Rget] %d: Fired EMPI_Rget\n", getpid());
+	fflush(stdout);
+
+    if(parep_mpi_sighandling_state == 2) {
+        parep_mpi_sighandling_state = 0;
+        parep_mpi_ckpt_wait = 1;
+        pthread_kill(pthread_self(), SIGUSR1);
+        while(parep_mpi_ckpt_wait) {;}
+    }
+    
+    parep_mpi_sighandling_state = 0;
+    if(pthread_self() == thread_tid[0]) parep_mpi_internal_call = int_call;
+    printf("[Rget] %d: Returning\n", getpid());
+	fflush(stdout);
+    return retVal;
+}
+
+int MPI_Win_fence(int assert, MPI_Win win) {
+    bool int_call;
+    int retVal;
+    
+    if(pthread_self() == thread_tid[0]) {
+        int_call = parep_mpi_internal_call;
+        parep_mpi_internal_call = true;
+    }
+    parep_mpi_sighandling_state = 1;
+    
+    // Look up the real struct from the user's integer ID
+    struct ft_win_t *my_win = winarr[win];
+    
+    // Fire the hardware fence
+    retVal = EMPI_Win_fence(assert, my_win->ewin);
+    
+    if(parep_mpi_sighandling_state == 2) {
+        parep_mpi_sighandling_state = 0;
+        parep_mpi_ckpt_wait = 1;
+        pthread_kill(pthread_self(), SIGUSR1);
+        while(parep_mpi_ckpt_wait) {;}
+    }
+    
+    parep_mpi_sighandling_state = 0;
+    if(pthread_self() == thread_tid[0]) parep_mpi_internal_call = int_call;
+    
+    return retVal;
+}
+
+int MPI_Win_lock(int lock_type, int rank, int assert, MPI_Win win) {
+    bool int_call;
+    int retVal;
+    
+    // 1. Thread safety and locking for the framework
+    if(pthread_self() == thread_tid[0]) {
+        int_call = parep_mpi_internal_call;
+        parep_mpi_internal_call = true;
+    }
+    parep_mpi_sighandling_state = 1; // Prevent checkpoints mid-call
+    
+    // 2. Look up the real struct from the user's integer ID
+    struct ft_win_t *my_win = winarr[win];
+    
+    // 3. Execute the native hardware call
+    retVal = EMPI_Win_lock(lock_type, rank, assert, my_win->ewin);
+    
+    // 4. Clean up and process any pending checkpoints retroactively
+    if(parep_mpi_sighandling_state == 2) {
+        parep_mpi_sighandling_state = 0;
+        parep_mpi_ckpt_wait = 1;
+        pthread_kill(pthread_self(), SIGUSR1);
+        while(parep_mpi_ckpt_wait) {;}
+    }
+    
+    parep_mpi_sighandling_state = 0;
+    if(pthread_self() == thread_tid[0]) parep_mpi_internal_call = int_call;
+    
+    return retVal;
+}
+
+int MPI_Win_unlock(int rank, MPI_Win win) {
+    bool int_call;
+    int retVal;
+    
+    // 1. Thread safety and locking for the framework
+    if(pthread_self() == thread_tid[0]) {
+        int_call = parep_mpi_internal_call;
+        parep_mpi_internal_call = true;
+    }
+    parep_mpi_sighandling_state = 1; // Prevent checkpoints mid-call
+    
+    // 2. Look up the real struct from the user's integer ID
+    struct ft_win_t *my_win = winarr[win];
+    
+    // 3. Execute the native hardware call
+    retVal = EMPI_Win_unlock(rank, my_win->ewin);
+    
+    // 4. Clean up and process any pending checkpoints retroactively
+    if(parep_mpi_sighandling_state == 2) {
+        parep_mpi_sighandling_state = 0;
+        parep_mpi_ckpt_wait = 1;
+        pthread_kill(pthread_self(), SIGUSR1);
+        while(parep_mpi_ckpt_wait) {;}
+    }
+    
+    parep_mpi_sighandling_state = 0;
+    if(pthread_self() == thread_tid[0]) parep_mpi_internal_call = int_call;
+    
+    return retVal;
 }

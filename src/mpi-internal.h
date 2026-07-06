@@ -407,7 +407,6 @@ static struct skiplist
 	struct skiplist *next;
 } *skipcmplist = NULL, *skipreplist = NULL, *skipredlist = NULL;
 
-
 /* MPI_REQ LIST BEGIN */
 
 static int *internalranks;
@@ -466,7 +465,9 @@ enum mpi_ft_request_type {
 	MPI_FT_READ_ALL_REQUEST,
 	MPI_FT_WRITE_ALL_REQUEST,
 	MPI_FT_READ_AT_ALL_REQUEST,
-	MPI_FT_WRITE_AT_ALL_REQUEST
+	MPI_FT_WRITE_AT_ALL_REQUEST,
+	MPI_FT_RGET_REQUEST,
+	MPI_FT_RPUT_REQUEST
 };
 
 void parep_mpi_send_replication_data(int);

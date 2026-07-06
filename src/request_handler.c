@@ -970,11 +970,15 @@ void test_all_requests_no_lock() {
 }
 
 bool test_all_requests() {
+	printf("[tar] %d: inside test_all_requests\n", getpid());
+	fflush(stdout);
 	bool progressed = false;
 	bool signal_completion = false;
 	int testret;
 	for(reqNode *start = reqHead; start != NULL; start = start->next) {
 		if(!(start->req->complete)) {
+			printf("[tar] %d: Request type is %d\n", getpid(), start->req->type);
+			fflush(stdout);
 			if(start->req->type == MPI_FT_COLLECTIVE_REQUEST) {
 				MPI_Request req = start->req;
 				clcdata *cdata = (clcdata *)(req->storeloc);
@@ -1148,6 +1152,20 @@ bool test_all_requests() {
 					}
 					progressed = true;
 					signal_completion = true;
+				}
+			} else if(start->req->type == MPI_FT_RGET_REQUEST || start->req->type == MPI_FT_RPUT_REQUEST) {
+				printf("[tar] %d: test_all_requests.RMA\n", getpid());
+				fflush(stdout);
+				if (!start->req->complete) {
+					int flag = 0;
+					printf("[tar] %d: Req not yet complete, launching EMPI_Test", getpid());
+					fflush(stdout);
+					EMPI_Test(start->req->reqcmp, &flag, EMPI_STATUS_IGNORE);
+					printf("[tar] %d: Returned from EMPI_Test, flag is now %d", getpid(), flag);
+					fflush(stdout);
+					if (flag) {
+						start->req->complete = true; 
+					}
 				}
 			} else if((start->req->type == MPI_FT_READ_REQUEST) || (start->req->type == MPI_FT_WRITE_REQUEST)) {
 				MPI_Request req = start->req;

@@ -173,6 +173,10 @@ struct mpi_ft_request {
 //struct mpi_ft_request;
 typedef struct mpi_ft_request *MPI_Request;
 
+struct mpi_ft_win {
+	EMPI_Win ewin;
+};
+
 typedef int MPI_Message;
 typedef void (MPI_User_function) ( void *, void *, int *, MPI_Datatype * );
 typedef int (MPI_Copy_function) ( MPI_Comm, int, void *, void *, void *, int * );
