@@ -52,6 +52,8 @@ extern bool alt_comms;
 
 extern volatile sig_atomic_t parep_mpi_wait_block;
 
+extern struct mpi_ft_win *winarr[];
+
 reqNode *reqListInsert(MPI_Request req) {
 	reqNode *newnode = parep_mpi_malloc(sizeof(reqNode));
 	newnode->req = req;
@@ -970,15 +972,11 @@ void test_all_requests_no_lock() {
 }
 
 bool test_all_requests() {
-	printf("[tar] %d: inside test_all_requests\n", getpid());
-	fflush(stdout);
 	bool progressed = false;
 	bool signal_completion = false;
 	int testret;
 	for(reqNode *start = reqHead; start != NULL; start = start->next) {
 		if(!(start->req->complete)) {
-			printf("[tar] %d: Request type is %d\n", getpid(), start->req->type);
-			fflush(stdout);
 			if(start->req->type == MPI_FT_COLLECTIVE_REQUEST) {
 				MPI_Request req = start->req;
 				clcdata *cdata = (clcdata *)(req->storeloc);
@@ -1153,20 +1151,92 @@ bool test_all_requests() {
 					progressed = true;
 					signal_completion = true;
 				}
-			} else if(start->req->type == MPI_FT_RGET_REQUEST || start->req->type == MPI_FT_RPUT_REQUEST) {
-				printf("[tar] %d: test_all_requests.RMA\n", getpid());
+			} else if(start->req->type == MPI_FT_RGET_REQUEST) {
+				printf("%d: [tar] In RGet case of tar\n", getpid());
 				fflush(stdout);
 				if (!start->req->complete) {
-					int flag = 0;
-					printf("[tar] %d: Req not yet complete, launching EMPI_Test", getpid());
+					struct mpi_ft_win *my_win = winarr[start->req->rma_win_id];
+					int buf_idx = start->req->rma_buffer_index;
+					int my_rank;
+					EMPI_Comm_rank(EMPI_COMM_WORLD, &my_rank);
+					printf("%d: [tar] Got EMPI_Comm_rank\n", getpid());
 					fflush(stdout);
-					EMPI_Test(start->req->reqcmp, &flag, EMPI_STATUS_IGNORE);
-					printf("[tar] %d: Returned from EMPI_Test, flag is now %d", getpid(), flag);
-					fflush(stdout);
-					if (flag) {
-						start->req->complete = true; 
+					if (start->req->is_leader) {
+						int flag_cmp = 0, flag_rep = 0;
+
+						if (*(start->req->reqcmp) != EMPI_REQUEST_NULL) {
+							EMPI_Test(start->req->reqcmp, &flag_cmp, EMPI_STATUS_IGNORE);
+						}
+						if (*(start->req->reqrep) != EMPI_REQUEST_NULL) {
+							EMPI_Test(start->req->reqrep, &flag_rep, EMPI_STATUS_IGNORE);
+						}
+						printf("%d: [tar] EMPI_Tested req->reqcmp and req->reqrep\n", getpid());
+						fflush(stdout);
+
+						if (flag_cmp || flag_rep) {
+							printf("%d: [tar] Fastest Req caught! cmp:%d rep:%d\n", getpid(), flag_cmp, flag_rep);
+							fflush(stdout);
+
+							void *winning_buf = flag_cmp ? my_win->shadow_A[buf_idx] : my_win->shadow_B[buf_idx];
+
+							int extent;
+							EMPI_Type_size(start->req->datatype->edatatype, &extent);
+							memcpy(start->req->storeloc, winning_buf, start->req->count * extent);
+							printf("%d: [tar] Copied onto user_Array of leader\n", getpid());
+							fflush(stdout);
+
+							int my_rep_rank = cmpToRepMap[my_rank];
+							int data_offet = sizeof(int);
+
+							EMPI_Win_lock(EMPI_LOCK_EXCLUSIVE, my_rep_rank, 0, my_win->cache_win);
+							EMPI_Put(winning_buf, start->req->count, start->req->datatype->edatatype, my_rep_rank, data_offet, start->req->count, start->req->datatype->edatatype, my_win->cache_win);
+							printf("%d: [tar] PUT data in cache win\n", getpid());
+							fflush(stdout);
+							int ready_status = 2;
+							EMPI_Put(&ready_status, 1, EMPI_INT, my_rep_rank, 0, 1, EMPI_INT, my_win->cache_win);
+							printf("%d: [tar] PUT status in cache win\n", getpid());
+							fflush(stdout);
+							EMPI_Win_unlock(my_rep_rank, my_win->cache_win);
+
+							start->req->complete = true;
+
+							pthread_mutex_lock(&(my_win->rma_buf_pool_lock));
+							my_win->buffer_status[buf_idx] = 0;
+							pthread_cond_signal(&(my_win->rma_buf_pool_cond));
+							pthread_mutex_unlock(&(my_win->rma_buf_pool_lock));
+						}
+					} else {
+						int current_status = 0;
+
+						EMPI_Win_lock(EMPI_LOCK_EXCLUSIVE , my_rank, 0, my_win->cache_win);
+						EMPI_Get(&current_status, 1, EMPI_INT, my_rank, 0, 1, EMPI_INT, my_win->cache_win);
+						EMPI_Win_unlock(my_rank, my_win->cache_win);
+						printf("%d: [tar] Got status in cache win\n", getpid());
+						fflush(stdout);
+
+						if (current_status==2) {
+							printf("%d: [tar] FL detects LD finished\n", getpid());
+							fflush(stdout);
+
+							int extent;
+							EMPI_Type_size(start->req->datatype->edatatype, &extent);
+
+							void *local_data_ptr = (void *)((char *)my_win->cache_base + sizeof(int));
+							memcpy(start->req->storeloc, local_data_ptr, start->req->count * extent);
+							printf("%d: [tar] Copied data to user array of FL\n", getpid());
+							fflush(stdout);
+							start->req->complete = true;
+
+							int reset_status = 0;
+							EMPI_Win_lock(EMPI_LOCK_EXCLUSIVE, my_rank, 0, my_win->cache_win);
+							EMPI_Put(&reset_status, 1, EMPI_INT, my_rank, 0, 1, EMPI_INT, my_win->cache_win);
+							EMPI_Win_unlock(my_rank, my_win->cache_win);
+						}
 					}
 				}
+			} else if (start->req->type == MPI_FT_RPUT_REQUEST) {
+				printf("%d: [tar] In RPut case of tar\n", getpid());
+				fflush(stdout);
 			} else if((start->req->type == MPI_FT_READ_REQUEST) || (start->req->type == MPI_FT_WRITE_REQUEST)) {
 				MPI_Request req = start->req;
 				int flag;

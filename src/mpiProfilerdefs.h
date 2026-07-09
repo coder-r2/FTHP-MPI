@@ -169,13 +169,27 @@ struct mpi_ft_request {
 	MPI_Datatype datatype;
 	reqNode *rnode;
 	commbuf_node_t *cbuf; //Doubles as buffer for sending to replica for I/O
+	// for RMA
+	bool is_leader;
+	int rma_buffer_index;
+	int rma_win_id;
 };
 //struct mpi_ft_request;
 typedef struct mpi_ft_request *MPI_Request;
 
 struct mpi_ft_win {
 	EMPI_Win ewin;
+	EMPI_Win cache_win;
+	void *cache_base;
+	void *shadow_A[128];
+	void *shadow_B[128];
+	volatile int buffer_status[128];
+	int pool_size;
+	pthread_mutex_t rma_buf_pool_lock;
+	pthread_cond_t rma_buf_pool_cond;
 };
+
+
 
 typedef int MPI_Message;
 typedef void (MPI_User_function) ( void *, void *, int *, MPI_Datatype * );
