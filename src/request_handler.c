@@ -1157,10 +1157,21 @@ bool test_all_requests() {
 				if (!start->req->complete) {
 					struct mpi_ft_win *my_win = winarr[start->req->rma_win_id];
 					int buf_idx = start->req->rma_buffer_index;
-					int my_rank;
-					EMPI_Comm_rank(EMPI_COMM_WORLD, &my_rank);
-					printf("%d: [tar] Got EMPI_Comm_rank\n", getpid());
+					
+					int my_world_rank = -1, my_cmp_rank = -1, my_rep_rank = -1;
+					int is_compute = (MPI_COMM_WORLD->EMPI_COMM_CMP != EMPI_COMM_NULL);
+
+					if (is_compute) {
+						EMPI_Comm_rank(MPI_COMM_WORLD->EMPI_COMM_CMP, &my_cmp_rank);
+						my_world_rank = my_cmp_rank;
+					} else {
+						EMPI_Comm_rank(MPI_COMM_WORLD->EMPI_COMM_REP, &my_rep_rank);
+						my_world_rank = nC + my_rep_rank;
+					}
+
+					printf("%d: [TAR] Identified true world rank: %d | is_compute: %d\n", getpid(), my_world_rank, is_compute);
 					fflush(stdout);
+
 					if (start->req->is_leader) {
 						int flag_cmp = 0, flag_rep = 0;
 
@@ -1185,18 +1196,34 @@ bool test_all_requests() {
 							printf("%d: [tar] Copied onto user_Array of leader\n", getpid());
 							fflush(stdout);
 
-							int my_rep_rank = cmpToRepMap[my_rank];
-							int data_offet = sizeof(int);
+							int my_dual_world_rank = -1;
+							if (is_compute) {
+								my_rep_rank = cmpToRepMap[my_cmp_rank];
+								if (my_rep_rank != -1) my_dual_world_rank = nC + my_rep_rank;
+							} else {
+								my_cmp_rank = repToCmpMap[my_rep_rank];
+								my_dual_world_rank = my_cmp_rank;
+							}
 
-							EMPI_Win_lock(EMPI_LOCK_EXCLUSIVE, my_rep_rank, 0, my_win->cache_win);
-							EMPI_Put(winning_buf, start->req->count, start->req->datatype->edatatype, my_rep_rank, data_offet, start->req->count, start->req->datatype->edatatype, my_win->cache_win);
-							printf("%d: [tar] PUT data in cache win\n", getpid());
-							fflush(stdout);
-							int ready_status = 2;
-							EMPI_Put(&ready_status, 1, EMPI_INT, my_rep_rank, 0, 1, EMPI_INT, my_win->cache_win);
-							printf("%d: [tar] PUT status in cache win\n", getpid());
-							fflush(stdout);
-							EMPI_Win_unlock(my_rep_rank, my_win->cache_win);
+							if (my_dual_world_rank != -1) {
+								int data_offset = sizeof(int);
+								printf("%d: [TAR-LEADER] Attempting to LOCK my dual %d...\n", getpid(), my_dual_world_rank);
+								fflush(stdout);
+								EMPI_Win_lock(EMPI_LOCK_EXCLUSIVE, my_dual_world_rank, 0, my_win->cache_win);
+								printf("%d: [TAR-LEADER] LOCKED dual successfully. Doing PUT...\n", getpid());
+								fflush(stdout);
+								EMPI_Put(winning_buf, start->req->count, start->req->datatype->edatatype, my_dual_world_rank, data_offset, start->req->count, start->req->datatype->edatatype, my_win->cache_win);
+								int ready_status = 2;
+								EMPI_Put(&ready_status, 1, EMPI_INT, my_dual_world_rank, 0, 1, EMPI_INT, my_win->cache_win);
+								printf("%d: [TAR-LEADER] PUT finished. Attempting to UNLOCK dual %d...\n", getpid(), my_dual_world_rank);
+								fflush(stdout);
+								EMPI_Win_unlock(my_dual_world_rank, my_win->cache_win);
+								printf("%d: [TAR-LEADER] UNLOCKED dual successfully.\n", getpid());
+								fflush(stdout);
+							} else {
+								printf("%d: [TAR-LEADER] ERROR! my_dual_world_rank is -1. Skipping PUT.\n", getpid());
+								fflush(stdout);
+							}
 
 							start->req->complete = true;
 
@@ -1208,10 +1235,13 @@ bool test_all_requests() {
 					} else {
 						int current_status = 0;
 
-						EMPI_Win_lock(EMPI_LOCK_EXCLUSIVE , my_rank, 0, my_win->cache_win);
-						EMPI_Get(&current_status, 1, EMPI_INT, my_rank, 0, 1, EMPI_INT, my_win->cache_win);
-						EMPI_Win_unlock(my_rank, my_win->cache_win);
-						printf("%d: [tar] Got status in cache win\n", getpid());
+						printf("%d: [TAR-FOLLOWER] world_rank:%d | Polling my own cache_win for status=2...\n", getpid(), my_world_rank);
+						fflush(stdout);
+
+						EMPI_Win_lock(EMPI_LOCK_EXCLUSIVE , my_world_rank, 0, my_win->cache_win);
+						EMPI_Get(&current_status, 1, EMPI_INT, my_world_rank, 0, 1, EMPI_INT, my_win->cache_win);
+						EMPI_Win_unlock(my_world_rank, my_win->cache_win);
+						printf("%d: [tar] Got status in cache win: %d\n", getpid(), current_status);
 						fflush(stdout);
 
 						if (current_status==2) {
@@ -1228,9 +1258,9 @@ bool test_all_requests() {
 							start->req->complete = true;
 
 							int reset_status = 0;
-							EMPI_Win_lock(EMPI_LOCK_EXCLUSIVE, my_rank, 0, my_win->cache_win);
-							EMPI_Put(&reset_status, 1, EMPI_INT, my_rank, 0, 1, EMPI_INT, my_win->cache_win);
-							EMPI_Win_unlock(my_rank, my_win->cache_win);
+							EMPI_Win_lock(EMPI_LOCK_EXCLUSIVE, my_world_rank, 0, my_win->cache_win);
+							EMPI_Put(&reset_status, 1, EMPI_INT, my_world_rank, 0, 1, EMPI_INT, my_win->cache_win);
+							EMPI_Win_unlock(my_world_rank, my_win->cache_win);
 						}
 					}
 				}

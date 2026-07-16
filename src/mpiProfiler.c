@@ -12003,7 +12003,7 @@ int MPI_Win_create(void *base, MPI_Aint size, int disp_unit, MPI_Info info, MPI_
 	my_win->cache_base = cache_base;
 	printf("%d: [Win_create] Creating cache_win\n", getpid());
 	fflush(stdout);
-	EMPI_Win_create(cache_base, cache_size, 1, EMPI_INFO_NULL, EMPI_COMM_WORLD, &(my_win->cache_win));
+	EMPI_Win_create(cache_base, cache_size, 1, EMPI_INFO_NULL, comm->eworldComm, &(my_win->cache_win));
 	printf("%d: [Win_create] Created cache_win\n", getpid());
 	fflush(stdout);
 
@@ -12069,7 +12069,6 @@ int MPI_Win_free(MPI_Win *win) {
 	printf("%d: [Win_free] win freed ewin\n", getpid());
 	fflush(stdout);
     
-    // 3. Free our wrapper struct and clear the array
     parep_mpi_free(my_win);
 	printf("%d: [Win_free] mem freed my_win\n", getpid());
 	fflush(stdout);
@@ -12093,7 +12092,6 @@ int MPI_Rget(void *origin_addr, int origin_count, MPI_Datatype origin_datatype, 
 	printf("%d: [Rget] Entered Rget\n", getpid());
 	fflush(stdout);
     bool int_call;
-    int retVal;
     
     if(pthread_self() == thread_tid[0]) {
         int_call = parep_mpi_internal_call;
@@ -12101,7 +12099,6 @@ int MPI_Rget(void *origin_addr, int origin_count, MPI_Datatype origin_datatype, 
     }
     parep_mpi_sighandling_state = 1;
     
-    // 1. Look up the real struct pointer using the integer ID the user gave us
     struct mpi_ft_win *my_win = winarr[win];
     
     *request = (MPI_Request)parep_mpi_malloc(sizeof(struct mpi_ft_request));
@@ -12139,30 +12136,62 @@ int MPI_Rget(void *origin_addr, int origin_count, MPI_Datatype origin_datatype, 
 	pthread_mutex_unlock(&(my_win->rma_buf_pool_lock));
 	(*request)->rma_buffer_index = buf_idx;
 
-	int rankmine;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rankmine);
-	int my_rep_rank = cmpToRepMap[rankmine];
-	int target_val = 1, compare_val = 0, result_val = 0;
-	EMPI_Win_lock(EMPI_LOCK_EXCLUSIVE, my_rep_rank, 0, my_win->cache_win);
-	EMPI_Compare_and_swap(&target_val, &compare_val, &result_val, EMPI_INT, my_rep_rank, 0, my_win->cache_win);
-	EMPI_Win_unlock(my_rep_rank, my_win->cache_win);
-	printf("%d: [Rget] Leader elected\n", getpid());
+	int target_user_rank = target_rank;
+	int target_cmp_world_rank = target_user_rank;
+	int target_rep_rank = cmpToRepMap[target_user_rank];
+	int target_rep_world_rank = target_rep_rank != -1 ? (nC + target_rep_rank) : -1;
+
+	printf("%d: [RGET] Setup Targets -> cmp_world:%d, rep_world:%d\n", getpid(), target_cmp_world_rank, target_rep_world_rank);
 	fflush(stdout);
+
+	int is_compute = (MPI_COMM_WORLD->EMPI_COMM_CMP != EMPI_COMM_NULL);
+	int my_cmp_rank, my_rep_rank;
+
+	if (is_compute) {
+		EMPI_Comm_rank(MPI_COMM_WORLD->EMPI_COMM_CMP, &my_cmp_rank);
+		my_rep_rank = cmpToRepMap[my_cmp_rank];
+	} else {
+		EMPI_Comm_rank(MPI_COMM_WORLD->EMPI_COMM_REP, &my_rep_rank);
+		my_cmp_rank = repToCmpMap[my_rep_rank];
+	}
+
+	int my_rep_world_rank = my_rep_rank != -1 ? (nC + my_rep_rank) : -1;
+	int target_val = 1, compare_val = 0, result_val = 0;
+
+	if (my_rep_world_rank != -1) {
+		printf("%d: [RGET] Attempting CAS lock on rep_world_rank:%d\n", getpid(), my_rep_world_rank);
+		fflush(stdout);
+		EMPI_Win_lock(EMPI_LOCK_EXCLUSIVE, my_rep_world_rank, 0, my_win->cache_win);
+		EMPI_Compare_and_swap(&target_val, &compare_val, &result_val, EMPI_INT, my_rep_world_rank, 0, my_win->cache_win);
+		EMPI_Win_unlock(my_rep_world_rank, my_win->cache_win);
+		printf("%d: [RGET] CAS finished. Result:%d (0=Leader, 1=Follower)\n", getpid(), result_val);
+		fflush(stdout);
+	} else {
+		printf("%d: [RGET] Origin Replica is dead. Auto-electing Leader.\n", getpid());
+		fflush(stdout);
+		result_val = 0;
+	}
+
 	if (result_val==0) {
 		(*request)->is_leader = true;
 		
 		printf("%d: [Rget] Firing EMPI_Rget to comp\n", getpid());
 		fflush(stdout);
-		EMPI_Rget(my_win->shadow_A[buf_idx], origin_count, origin_datatype->edatatype, target_rank, target_disp, target_count, target_datatype->edatatype, my_win->ewin, (*request)->reqcmp);
+		EMPI_Rget(my_win->shadow_A[buf_idx], origin_count, origin_datatype->edatatype, target_cmp_world_rank, target_disp, target_count, target_datatype->edatatype, my_win->ewin, (*request)->reqcmp);
 		printf("%d: [Rget] Comp EMPI_Rget fired\n", getpid());
 		fflush(stdout);
 
-		int target_rep_rank = cmpToRepMap[target_rank];
-		printf("%d: [Rget] Firing EMPI_Rget to rep\n", getpid());
-		fflush(stdout);
-		EMPI_Rget(my_win->shadow_B[buf_idx], origin_count, origin_datatype->edatatype, target_rep_rank, target_disp, target_count, target_datatype->edatatype, my_win->ewin, (*request)->reqrep);
-		printf("%d: [Rget] Rep EMPI_Rget fired\n", getpid());
-		fflush(stdout);
+		if (target_rep_world_rank != -1) {
+			printf("%d: [Rget] Firing EMPI_Rget to rep\n", getpid());
+			fflush(stdout);
+			EMPI_Rget(my_win->shadow_B[buf_idx], origin_count, origin_datatype->edatatype, target_rep_world_rank, target_disp, target_count, target_datatype->edatatype, my_win->ewin, (*request)->reqrep);
+			printf("%d: [Rget] Rep EMPI_Rget fired\n", getpid());
+			fflush(stdout);
+		} else {
+			printf("%d: [Rget] Target Rep dead, skipping reqrep");
+			fflush(stdout);
+		}
+		
 	} else {
 		(*request)->is_leader = false;
 	}
@@ -12192,25 +12221,37 @@ int MPI_Rget(void *origin_addr, int origin_count, MPI_Datatype origin_datatype, 
 int MPI_Win_lock(int lock_type, int rank, int assert, MPI_Win win) {
     bool int_call;
     int retVal;
-    
-    // 1. Thread safety and locking for the framework
+    printf("[lock] %d: Entered winlock\n", getpid());
+	fflush(stdout);
     if(pthread_self() == thread_tid[0]) {
         int_call = parep_mpi_internal_call;
         parep_mpi_internal_call = true;
     }
-    parep_mpi_sighandling_state = 1; // Prevent checkpoints mid-call
+    parep_mpi_sighandling_state = 1;
     
-    // 2. Look up the real struct from the user's integer ID
     struct mpi_ft_win *my_win = winarr[win];
-    // 3. Execute the native hardware call
-    EMPI_Win_lock(lock_type, rank, assert, my_win->ewin);
 
-	int rep_rank = cmpToRepMap[rank];
-	if (rank != rep_rank) {
-		EMPI_Win_lock(lock_type, rep_rank, assert, my_win->ewin);
+	int target_user_rank = rank;
+	int target_rep_rank = cmpToRepMap[target_user_rank];
+
+	printf("[lock] %d: Target rank setup done\n", getpid());
+	fflush(stdout);
+	EMPI_Win_lock(lock_type, target_user_rank, assert, my_win->ewin);
+	printf("[lock] %d: empi cmp lock done\n", getpid());
+	fflush(stdout);
+
+	if (target_rep_rank != -1) {
+		int target_rep_world_rank = nC + target_rep_rank;
+		printf("[lock] %d: empi rep locking\n", getpid());
+		fflush(stdout);
+		EMPI_Win_lock(lock_type, target_rep_world_rank, assert, my_win->ewin);
+		printf("[lock] %d: empi rep lock done\n", getpid());
+		fflush(stdout);
+	} else {
+		printf("[lock] %d: no rep to lock\n", getpid());
+		fflush(stdout);
 	}
     
-    // 4. Clean up and process any pending checkpoints retroactively
     if(parep_mpi_sighandling_state == 2) {
         parep_mpi_sighandling_state = 0;
         parep_mpi_ckpt_wait = 1;
@@ -12228,24 +12269,24 @@ int MPI_Win_unlock(int rank, MPI_Win win) {
     bool int_call;
     int retVal;
     
-    // 1. Thread safety and locking for the framework
     if(pthread_self() == thread_tid[0]) {
         int_call = parep_mpi_internal_call;
         parep_mpi_internal_call = true;
     }
-    parep_mpi_sighandling_state = 1; // Prevent checkpoints mid-call
+    parep_mpi_sighandling_state = 1;
     
-    // 2. Look up the real struct from the user's integer ID
     struct mpi_ft_win *my_win = winarr[win];
-    int rep_rank = cmpToRepMap[rank];
 
-    // 3. Execute the native hardware call
-    EMPI_Win_unlock(rank, my_win->ewin);
-	if (rank != rep_rank) {
-		EMPI_Win_unlock(rep_rank, my_win->ewin);
+	int target_user_rank = rank;
+	int target_rep_rank = cmpToRepMap[target_user_rank];
+
+	EMPI_Win_unlock(target_user_rank, my_win->ewin);
+
+	if (target_rep_rank != -1) {
+		int target_rep_world_rank = nC + target_rep_rank;
+		EMPI_Win_unlock(target_rep_world_rank, my_win->ewin);
 	}
-    
-    // 4. Clean up and process any pending checkpoints retroactively
+
     if(parep_mpi_sighandling_state == 2) {
         parep_mpi_sighandling_state = 0;
         parep_mpi_ckpt_wait = 1;
